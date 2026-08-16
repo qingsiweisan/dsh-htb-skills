@@ -1,6 +1,7 @@
 ---
 name: 'unknown-service-probe'
 description: '未知服务探测 SOP：端口不在 service-attacks 查表中 → 三步探测法 (Banner→协议指纹→CVE)。含二进制协议指纹 magic bytes 和 5 分钟规则。'
+whenToUse: '端口开放但不在 service-attacks 查表中时'
 metadata: { domain: network, tier: T1 }
 ---
 > 📌 DSH 适配：本技能移植自 RS。原 read_skill/run_skill 调用 = 用 DSH 的 skill 工具按名加载对应技能；fleet/kali-mcp = 用 bash 后台任务与 subagent 工具实现。

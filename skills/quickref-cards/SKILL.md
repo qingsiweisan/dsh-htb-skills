@@ -1,6 +1,7 @@
 ---
 name: 'quickref-cards'
 description: '🔴 高频攻击链一键参考卡片 — 每条含前置验证+具体实例+常见错误+成功输出样例。卡壳时第一站。'
+whenToUse: '卡壳第一站：搜攻击名直接抄命令链'
 metadata: { domain: meta, tier: T1 }
 ---
 > 📌 DSH 适配：本技能移植自 RS。原 read_skill/run_skill 调用 = 用 DSH 的 skill 工具按名加载对应技能；fleet/kali-mcp = 用 bash 后台任务与 subagent 工具实现。

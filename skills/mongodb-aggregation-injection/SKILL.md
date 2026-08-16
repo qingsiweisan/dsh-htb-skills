@@ -208,7 +208,7 @@ async def search(pipeline: list):   # 接受原始 pipeline 数组
 - aggregate() 比 find() 危险得多 → $lookup 能跨集合读，$merge 能写
 - 请求体是 JSON 数组 = aggregate pipeline 注入点
 - 不仅读数据，可以写、可以 RCE ($function)
-- 详见 mongodb-nosql-injection（传统 $ne/$regex/$where 注入）
+- 详见 web-attacks（NoSQL 注入章节：$ne/$regex/$where 传统注入）
 
 **Why:** MongoDB aggregate pipeline 注入是与传统 NoSQLi 不同的攻击面。Odyssey Insane 的入口就是 $facet+$lookup 泄露 token。
 **How to apply:** 遇到 body 是 JSON 数组的 POST 端点 → 立即测试 stage 插入。优先用 $lookup 读数据，$unionWith 合并数据，$merge 写数据。

@@ -1,6 +1,6 @@
 ---
 name: 'string-replace-dollar-sequence-xss'
-description: 'String.replace 的 $`/$'''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''' 特殊序列注入模板引擎 XSS（Nomad Notes 钥匙）+ Codex 卡死教练介入教训'
+description: 'String.replace 的 $`/$'' 特殊序列注入模板引擎 XSS（Nomad Notes 钥匙）+ Codex 卡死教练介入教训'
 disable-model-invocation: true
 metadata: { domain: web, tier: T3 }
 ---

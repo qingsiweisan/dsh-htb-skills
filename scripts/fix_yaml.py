@@ -80,7 +80,14 @@ def main():
         out = []
         for k, v in fields:
             if k in ('name', 'description', 'whenToUse'):
-                out.append('%s: %s' % (k, yq(strip_quotes(v))))
+                # 先 YAML 解码拿到真实字符串值，再统一转义重写。
+                # 直接 strip_quotes + 转义会把上一轮已转义的 '' 再次转义（引号翻倍），
+                # 因此必须解码（幂等）。
+                try:
+                    true_val = yaml.safe_load('%s: %s' % (k, v))[k]
+                except Exception:
+                    true_val = strip_quotes(v)
+                out.append('%s: %s' % (k, yq(true_val)))
             else:
                 for seg in v.split('\n'):
                     out.append('%s: %s' % (k, seg))

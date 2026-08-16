@@ -44,8 +44,10 @@ dsh-htb-skills/
 │   ├── box-startup/      #   T1 路由卡示例
 │   └── ...               #   T2/T3 卡带 disable-model-invocation: true
 └── scripts/
-    ├── triage_skills.py  # 分层/修 whenToUse/修坏链/重生成索引卡
-    └── fix_yaml.py       # 全量 YAML 引号规范 + PyYAML 校验
+    ├── triage_skills.py  # 分层/修 whenToUse/修坏链/重生成索引卡（末尾自动跑路由审计）
+    ├── fix_yaml.py       # 全量 YAML 引号规范 + PyYAML 校验（幂等：解码后重转义）
+    └── audit_routing.py  # 路由完整性审计（只读）：名字唯一性/MAPPING 双向一致/
+                          #   tier 与 disable-model-invocation 一致/索引卡新鲜度/跨卡引用可解析
 ```
 
 ### 卡片的 frontmatter 约定
@@ -66,14 +68,17 @@ metadata: { domain: web, tier: T1 }
 
 ## 维护
 
-改完技能后跑一遍校验（需 `pip install pyyaml`）：
+改完技能后跑一遍校验链（需 `pip install pyyaml`；三个脚本都幂等，可重复跑）：
 
 ```sh
 python scripts/fix_yaml.py        # 规范引号 + 校验全部 frontmatter
-python scripts/triage_skills.py   # 需要重新分层/重生成索引卡时
+python scripts/triage_skills.py   # 分层元数据 + 重生成索引卡（末尾自动跑路由审计）
+python scripts/audit_routing.py   # 路由审计：引用解析/索引一致性（任一错误退出码 1）
 ```
 
-新增一张卡 = 在 `skills/` 下建目录 + 写 SKILL.md + 在 `scripts/triage_skills.py` 的 `MAPPING` 里登记 domain/tier，重跑 triage 生成索引。插件 `watch` 默认开启，编辑后无需重启。
+audit_routing.py 检查的路由面：卡名合法且唯一、目录名与卡名一致（警告）、`MAPPING` 与磁盘双向覆盖（索引不会挂空、不会漏卡）、`metadata.tier` 与 `disable-model-invocation` 一致、索引卡与 `MAPPING` 生成内容逐字节一致（STALE-INDEX）、卡内 backtick/[[wiki]]/中文路由关键词（加载/详见/见/查…）引用的名字全部可解析（DANGLING-REF），以及引号翻倍回归守卫（QUOTE-RUN-CORRUPTION）。
+
+新增一张卡 = 在 `skills/` 下建目录 + 写 SKILL.md + 在 `scripts/triage_skills.py` 的 `MAPPING` 里登记 domain/tier，重跑校验链。插件 `watch` 默认开启，编辑后无需重启。
 
 ## 发布到 GitHub / npm
 

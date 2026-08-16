@@ -1,6 +1,7 @@
 ---
 name: 'htb-master-checklist'
 description: 'HTB 按领域速查索引：题型信号/Web/CMS/反弹Shell/提权优先级/凭据/hashcat 表/横向命令清单，各节指向深卡。完整执行流程见 htb-methodology。'
+whenToUse: '按领域快速翻攻击清单时；完整执行流改用 htb-methodology'
 metadata: { domain: meta, tier: T1 }
 ---
 > 📌 DSH 适配：本技能移植自 RS。原 read_skill/run_skill 调用 = 用 DSH 的 skill 工具按名加载对应技能；fleet/kali-mcp = 用 bash 后台任务与 subagent 工具实现。

@@ -1,6 +1,7 @@
 ---
 name: 'tool-scenario-reference'
 description: '按攻击场景索引的精确工具命令，含常见错误和修正。场景→命令，不是工具→参数。'
+whenToUse: '需要某个攻击场景的精确命令（如 dump krbtgt）时'
 metadata: { domain: meta, tier: T1 }
 ---
 > 📌 DSH 适配：本技能移植自 RS。原 read_skill/run_skill 调用 = 用 DSH 的 skill 工具按名加载对应技能；fleet/kali-mcp = 用 bash 后台任务与 subagent 工具实现。

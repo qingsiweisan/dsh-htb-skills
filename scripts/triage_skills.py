@@ -54,6 +54,9 @@ MAPPING = {
     'parallel-recon': ('meta', 'T1'),
     'quickref-cards': ('meta', 'T1'),
     'tool-scenario-reference': ('meta', 'T1'),
+    # 索引卡本身也走 MAPPING，保证 loop 会刷新它的 metadata；
+    # generate_index_text() 会把它从表格里排除，避免自引用。
+    'htb-skill-index': ('meta', 'T1'),
     'blocking-points-detail': ('meta', 'T2'),
     # web
     'cms-framework-rce': ('web', 'T1'),
@@ -173,6 +176,26 @@ REMOVE = {
 
 FIELD_RE = re.compile(r'^([A-Za-z][\w-]*)\s*:(.*)$')
 
+try:
+    import yaml as _yaml
+except ImportError:
+    _yaml = None
+
+
+def yaml_unquote(v):
+    """YAML 解码一个已加引号的标量值，得到真实字符串。
+
+    直接 strip 外层引号会把上一轮已转义的 '' 留在值里，再次转义时引号翻倍；
+    解码保证幂等。解码失败时退回纯外层引号剥离。
+    """
+    v = v.strip()
+    if _yaml is not None and v:
+        try:
+            return _yaml.safe_load('x: ' + v)['x']
+        except Exception:
+            pass
+    return unquote(v)
+
 
 def parse_frontmatter(raw):
     if not raw.startswith('---'):
@@ -212,6 +235,46 @@ def yq(v):
     return "'" + v.replace("'", "''") + "'"
 
 
+def generate_index_text(mapping, on_disk=None):
+    """Render the htb-skill-index SKILL.md from a MAPPING table.
+
+    mapping:  {name: (domain, tier)}   on_disk: optional set of card dirs
+    currently present; dead MAPPING entries are excluded so a stale run
+    cannot advertise cards that cannot load.
+    """
+    by_domain = defaultdict(lambda: defaultdict(list))
+    for n, (d, t) in sorted(mapping.items()):
+        if n == INDEX_NAME:
+            continue
+        if on_disk is not None and n not in on_disk:
+            continue
+        by_domain[d][t].append(n)
+    lines = ['---',
+             "name: 'htb-skill-index'",
+             "description: 'HTB 技能库总索引：按领域×层级列出全部技能名，供目录外卡名反查与按需加载。卡壳或需要具体技术时先查本表。'",
+             "whenToUse: '目录里没有所需技能、卡壳、或需要按领域×层级反查全部卡名时'",
+             'metadata: { domain: meta, tier: T1 }',
+             '---', '',
+             '# HTB 技能库索引', '',
+             '用法：目录（system prompt）里只列出 T1 卡。T2/T3 卡设置了 disable-model-invocation，',
+             '不在目录中，但都可以用 skill 工具按名加载。命中具体技术时，直接用下面的名字加载；',
+             '不要根据名字猜测内容，加载后再按其指引执行。', '']
+    for dom in DOMAIN_LABEL:
+        tiers = by_domain.get(dom, {})
+        lines.append('## %s' % DOMAIN_LABEL[dom])
+        lines.append('')
+        for tier in ('T1', 'T2', 'T3'):
+            names = sorted(tiers.get(tier, []))
+            if names:
+                lines.append('- **%s（%d）**：%s' % (tier, len(names), '、'.join(names)))
+        lines.append('')
+    lines.append('## 备注')
+    lines.append('')
+    lines.append('- 移出技能库（个人状态/非 HTB）：%s' % '、'.join(sorted(REMOVE)))
+    lines.append('- 本索引由 scripts/triage_skills.py 生成，修改技能库后重新生成以保持同步。')
+    return '\n'.join(lines) + '\n'
+
+
 def main():
     os.makedirs(ARCHIVE, exist_ok=True)
     processed = []
@@ -233,14 +296,16 @@ def main():
         for k, v in fields:
             fdict[k] = v
 
-        name = unquote(fdict.get('name', ''))
-        desc = unquote(fdict.get('description', ''))
+        name = yaml_unquote(fdict.get('name', ''))
+        desc_raw = fdict.get('description', '')
         when = fdict.get('whenToUse', '')
-        if 'whenToUse' not in fdict and ' whenToUse: ' in desc:
-            idx = desc.index(' whenToUse: ')
-            when = desc[idx + len(' whenToUse: '):].strip()
-            desc = desc[:idx].strip()
+        if 'whenToUse' not in fdict and ' whenToUse: ' in desc_raw:
+            idx = desc_raw.index(' whenToUse: ')
+            when = desc_raw[idx + len(' whenToUse: '):].strip()
+            desc_raw = desc_raw[:idx].strip()
             report.append(('FIXED-WHENTOUSE', entry))
+        desc = yaml_unquote(desc_raw)
+        when = yaml_unquote(when)
         if '[[mongodb-nosql-injection]]' in desc or '[[mongodb-nosql-injection]]' in body:
             desc = desc.replace('[[mongodb-nosql-injection]]', 'web-attacks')
             body = body.replace('[[mongodb-nosql-injection]]', 'web-attacks')
@@ -258,7 +323,6 @@ def main():
             continue
 
         domain, tier = MAPPING[entry]
-        when = unquote(when)
         lines = ['---', 'name: %s' % yq(name)]
         if desc:
             lines.append('description: %s' % yq(desc))
@@ -277,41 +341,31 @@ def main():
 
     tier_count = Counter(t for _, _, t in processed)
     domain_count = Counter(d for _, d, _ in processed)
-    by_domain = defaultdict(lambda: defaultdict(list))
-    for n, d, t in processed:
-        by_domain[d][t].append(n)
 
     idx_dir = os.path.join(SKILLS, INDEX_NAME)
     os.makedirs(idx_dir, exist_ok=True)
-    lines = ['---',
-             'name: %s' % INDEX_NAME,
-             'description: HTB 技能库总索引：按领域×层级列出全部技能名，供目录外卡名反查与按需加载。卡壳或需要具体技术时先查本表。',
-             'metadata: { domain: meta, tier: T1 }',
-             '---', '',
-             '# HTB 技能库索引', '',
-             '用法：目录（system prompt）里只列出 T1 卡。T2/T3 卡设置了 disable-model-invocation，',
-             '不在目录中，但都可以用 skill 工具按名加载。命中具体技术时，直接用下面的名字加载；',
-             '不要根据名字猜测内容，加载后再按其指引执行。', '']
-    for dom in DOMAIN_LABEL:
-        tiers = by_domain.get(dom, {})
-        lines.append('## %s' % DOMAIN_LABEL[dom])
-        lines.append('')
-        for tier in ('T1', 'T2', 'T3'):
-            names = sorted(tiers.get(tier, []))
-            if names:
-                lines.append('- **%s（%d）**：%s' % (tier, len(names), '、'.join(names)))
-        lines.append('')
-    lines.append('## 备注')
-    lines.append('')
-    lines.append('- 移出技能库（个人状态/非 HTB）：%s' % '、'.join(sorted(REMOVE)))
-    lines.append('- 本索引由 scripts/triage_skills.py 生成，修改技能库后重新生成以保持同步。')
+    on_disk = {n for n, _, _ in processed}
     with open(os.path.join(idx_dir, 'SKILL.md'), 'w', encoding='utf-8', newline='') as f:
-        f.write('\n'.join(lines) + '\n')
+        f.write(generate_index_text(MAPPING, on_disk=on_disk))
 
     print('processed: %d  moved: %d  tiers: %s  domains: %s' % (
         len(processed), len(moved), dict(tier_count), dict(domain_count)))
     for r in report:
         print('report:', r)
+
+    # 硬错误（缺 frontmatter / 未映射）必须让整条校验链失败。
+    hard = [r for r in report if r[0] in ('NO-SKILLMD', 'NO-FRONTMATTER', 'UNMAPPED')]
+    if hard:
+        for r in hard:
+            print('ERROR:', r)
+        sys.exit(1)
+
+    # 最后跑一遍路由审计（引用解析/索引一致性），任何错误都会以退出码 1 冒泡。
+    try:
+        import audit_routing
+        sys.exit(audit_routing.main())
+    except ImportError:
+        print('hint: scripts/audit_routing.py not found; routing audit skipped')
 
 
 if __name__ == '__main__':

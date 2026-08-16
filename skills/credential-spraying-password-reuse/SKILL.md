@@ -1,6 +1,7 @@
 ---
 name: 'credential-spraying-password-reuse'
 description: '凭据喷洒方法论：拿到密码/疑似凭据后横向测试所有服务的强制流程（🆕 疑似凭据先喷后判 + Principal 案例）'
+whenToUse: '拿到任何密码/哈希/疑似凭据后，准备横向复用测试之前'
 metadata: { domain: creds, tier: T1 }
 ---
 > 📌 DSH 适配：本技能移植自 RS。原 read_skill/run_skill 调用 = 用 DSH 的 skill 工具按名加载对应技能；fleet/kali-mcp = 用 bash 后台任务与 subagent 工具实现。
