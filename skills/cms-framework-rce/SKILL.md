@@ -1,6 +1,6 @@
 ---
 name: 'cms-framework-rce'
-description: 'CMS/Web框架RCE速查：WordPress/Joomla/Drupal/Magento/Django/Flask/Spring Boot/Laravel 等 25+ CMS。'
+description: 'CMS/Web框架RCE速查：WordPress/Joomla/Drupal/Magento/Django/Flask/Spring Boot/Laravel 等 25+ CMS。含 CVE 索引（Krayin 38526/36340、OpenSTAManager 69212、CVE-2025-29927 中间件绕过、js2py 28397）。'
 whenToUse: '目标为 CMS 或 Web 框架时按框架名定位 RCE 路径；Krayin CRM (CVE-2026-38526) 见正文。'
 metadata: { domain: web, tier: T1 }
 ---

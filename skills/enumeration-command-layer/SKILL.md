@@ -1,7 +1,7 @@
 ---
 name: 'enumeration-command-layer'
 description: '两阶段枚举框架：外部枚举 (nmap后四轮) + 内部枚举 (拿shell后五维摸底: 定位/网络/进程/文件/用户)。'
-whenToUse: '每个内网端口都是新攻击面；注意 Unix socket 感知 + localhost 陷阱警告。'
+whenToUse: '外部枚举（nmap 后四轮）或拿 shell 后内部五维摸底时；每个内网端口都是新攻击面，注意 Unix socket 感知 + localhost 陷阱。'
 metadata: { domain: meta, tier: T1 }
 ---
 > 📌 DSH 用法：用 skill 工具按名加载本卡。

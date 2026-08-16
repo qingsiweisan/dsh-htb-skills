@@ -1,6 +1,6 @@
 ---
 name: 'tool-scenario-reference'
-description: '按攻击场景索引的精确工具命令，含常见错误和修正。场景→命令，不是工具→参数。'
+description: '按攻击场景索引的精确工具命令，含常见错误和修正。场景→命令：RODC krbtgt_XXXX dump/Golden Ticket/KeyList、MSSQL 模拟登录、PsExec 跳板、Werkzeug 哈希识别。'
 whenToUse: '需要某个攻击场景的精确命令（如 dump krbtgt）时'
 metadata: { domain: meta, tier: T1 }
 ---

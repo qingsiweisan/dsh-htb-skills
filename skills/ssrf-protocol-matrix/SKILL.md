@@ -1,7 +1,7 @@
 ---
 name: 'ssrf-protocol-matrix'
-description: 'SSRF 协议测试矩阵：file/http/netdoc/gopher 逐个试 → 能力分级 L1-L6 → 关键问题检查表'
-whenToUse: '目标有 SSRF 且内网地址/元数据被过滤时：先跑协议矩阵定能力，再按绕过节过一遍黑名单。'
+description: 'SSRF 协议矩阵 + 黑名单绕过：file/gopher 探测 → 能力分级 L1-L6 → 检查表；含实战绕过（IMDS 十进制 IP 2852039166、?x.yaml 后缀伪造、八进制），Nimbus 等 Hard 靶机亲测有效'
+whenToUse: '发现 URL 抓取/导入/回调等 SSRF 原语后、动手测协议之前必读；内网地址被黑名单拦时直接查绕过节。'
 metadata: { domain: web, tier: T1 }
 ---
 

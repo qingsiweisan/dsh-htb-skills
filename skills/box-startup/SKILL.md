@@ -123,6 +123,7 @@ metadata: { domain: meta, tier: T1 }
         🆕 🔴 并行子代理/parallel-recon 强制: 版本扫描后，端口探测+搜索全部丢 subagent（2-8 并行）
             → 主上下文只收结论摘要，细节 subagent 返回结果 按需取（Hercules: 串行灌爆上下文压缩3-4次）
         ├─ HTTP/S → whatweb + gobuster + ffuf vhost + curl headers
+        │    └─ 发现 URL 抓取/导入/回调/图片代理 → 🔴 先加载 ssrf-protocol-matrix 再动手测协议
         ├─ SMB → nxc 匿名 + smbclient 枚举
         ├─ 其他端口 → 查侦察字典表逐项执行
         ├─ 🔴 阻断点4: 攻击面穷举框架 (仅未加载 no-hint-solving 时执行；已加载 → 跳至其 A–E，二选一不重复)
@@ -154,18 +155,23 @@ metadata: { domain: meta, tier: T1 }
         [3] 变更复盘: 本次哪条规则"想到了没用/用了不对" → 记入下次收尾检查
 ```text
 
-## 🔗 按需加载的专项 Skill
+## 🔗 按需加载的专项 Skill（🔴 答案就在卡里：场景命中 → 先加载再动手）
 
-> 🔴 **不自动加载。agent 按需用 skill 工具加载 <name>。**
+> 🔴 **场景命中时必须先加载对应卡再执行，禁止凭记忆硬打。**
+> 卡里含靶机实测的绕过技巧与命令（凭记忆会重踩已沉淀的坑，Nimbus 教训：SSRF 十进制 IP 绕过、CodeBuild 镜像 quirk 等都在卡里，手搓浪费数小时）。
 
-| 场景 | Skill | 关键内容 |
+| 场景 | 先加载 | 卡里已有的答案（示例） |
 |------|-------|---------|
-| Web 端口 | `web-attacks` | 先读顶部索引定位技术栈 |
-| 非 Web 服务 | `service-attacks` | 先读顶部索引定位端口 |
-| Linux shell | `linux-privesc` | 先读顶部索引匹配内核版本 |
-| Windows shell | `windows-privesc` + `ad-checklist` | 先 SharpHound |
-| 凭据到手 | `password-attacks` + `lateral-movement` | hashcat 模式选择 |
-| 容器/Pod | `container-escape` | privileged/capabilities 检查 |
-| AD 域 | `ad-checklist` | 攻击路径优先级 |
-| 同一路径失败 ≥3 | `debug-5whys` | 假设审计→二分验证 |
+| Web 端口 | `web-attacks` | 技术栈→攻击映射、OWASP 2025 新趋势 |
+| **URL 抓取/导入/回调/图片代理** | `ssrf-protocol-matrix` | **IMDS 十进制 IP（2852039166）、?x.yaml 后缀绕过** |
+| 端口不在查表 | `unknown-service-probe` | 三步探测 SOP、二进制协议 magic bytes |
+| **IMDS/AWS/云资源线索** | `aws-attack-surface` | 云攻击面清单、IAM 权限链、SQS/CodeBuild 利用 |
+| 非 Web 服务 | `service-attacks` | 41 端口 枚举→利用→验证 |
+| Linux shell | `linux-privesc` | 8 阶段检查表、2026 通杀 CVE |
+| Windows shell | `windows-privesc` | 特权令牌→服务→内核 CVE 全链 |
+| AD 域 | `ad-checklist` + `ad-type-recognition` | 题型决策树、攻击路径优先级 |
+| 凭据到手 | `password-attacks` + `credential-spraying-password-reuse` | hashcat 模式选择、先喷后判 |
+| 容器/Pod | `container-escape` | 决策树、K8s SA token→RBAC |
+| 同路径失败 ≥2 | `debug-5whys` | 假设审计→二分验证 |
+| 卡壳/需要具体技术 | `htb-skill-index` | 全卡名反查表 |
 | 记忆无匹配 | `no-hint-solving` | A→E 自主发现五阶段 |
