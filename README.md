@@ -6,7 +6,7 @@ HTB（Hack The Box）打靶技能库，封装为 DeepSeek Harness 插件。
 
 ## 是什么
 
-- **112 张技能卡**：从 Reasonix Studio 的 HTB 技能库移植，覆盖 Web / AD-Windows / Linux / 数据库 / 云 / 取证等 10 个领域；
+- **114 张技能卡**：从 Reasonix Studio 的 HTB 技能库移植，覆盖 Web / AD-Windows / Linux / 数据库 / 云 / 取证等 10 个领域；
 - **插件形态**：包内自带 `skills/` 树，通过官方 `@deepseek-ai/dsh-skill-filesystem` 的 provider 机制注册为名为 `htb` 的技能提供者——技能随包版本化、git 管理，编辑即时热重载，不写任何文件进 `~/.dsh/skills`；
 - **三层结构**：T1 路由卡进会话目录；T2 深度卡 / T3 参考卡带 `disable-model-invocation: true` 隐藏，按名精确加载；`htb-skill-index` 是全部卡名的领域×层级总索引。
 
@@ -39,15 +39,19 @@ dsh-htb-skills/
 ├── package.json          # dsh.bundle.patch 指向 cordis.patch.yml
 ├── cordis.patch.yml      # 注入 host 插件行：- id: htb-skills
 ├── src/index.js          # 插件本体：注册 htb skill provider（无浏览器半区）
-├── skills/               # 112 张技能卡（SKILL.md + frontmatter）
+├── skills/               # 114 张技能卡（SKILL.md + frontmatter）
 │   ├── htb-skill-index/  #   总索引（T1，进目录）
-│   ├── box-startup/      #   T1 路由卡示例
+│   ├── box-startup/      #   T1 路由卡示例（含 key-state 产物规范）
 │   └── ...               #   T2/T3 卡带 disable-model-invocation: true
+├── docs/
+│   ├── CARD-NORMS.md     # 卡片写作规范（可解析工件/漏洞形状/语义 rubric/子代理隔离）
+│   └── ARCHITECTURE.md   # 架构与变异点地图（机制域 vs 内容域，改框架先读它）
 └── scripts/
     ├── triage_skills.py  # 分层/修 whenToUse/修坏链/重生成索引卡（末尾自动跑路由审计）
     ├── fix_yaml.py       # 全量 YAML 引号规范 + PyYAML 校验（幂等：解码后重转义）
-    └── audit_routing.py  # 路由完整性审计（只读）：名字唯一性/MAPPING 双向一致/
-                          #   tier 与 disable-model-invocation 一致/索引卡新鲜度/跨卡引用可解析
+    ├── audit_routing.py  # 路由完整性审计（只读）：名字唯一性/MAPPING 双向一致/
+    │                     #   tier 与 disable-model-invocation 一致/索引卡新鲜度/跨卡引用可解析
+    └── verify_run.py     # 判定层：flag/cred 捕获事件的确定性复核（读磁盘 transcript）
 ```
 
 ### 卡片的 frontmatter 约定
