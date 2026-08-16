@@ -1,7 +1,7 @@
 ---
 name: 'box-startup'
-description: 'HTB 靶机启动：5件必做→双轨查询→粘滞点匹配。核心骨架，战术细节按需加载。'
-whenToUse: '开始打一台新 HTB 靶机时：5 件必做 + 双轨查询 + 粘滞点匹配，其余战术按需加载。'
+description: 'HTB 靶机启动：5件必做→双轨查询→粘滞点匹配→key-state 落盘契约。核心骨架，战术细节按需加载。'
+whenToUse: '开始打一台新 HTB 靶机时：5 件必做 + 双轨查询 + 粘滞点匹配 + key-state 产物规范，其余战术按需加载。'
 metadata: { domain: meta, tier: T1 }
 ---
 > 📌 DSH 用法：用 skill 工具按名加载本卡。
@@ -13,8 +13,8 @@ metadata: { domain: meta, tier: T1 }
 ## ⛔ 禁止行为
 
 ```text
-❌ "我看到 X，可能是什么？" → 读工作区的 <box>-progress.md 进度文件（自己维护的进度笔记）！
-❌ "接下来怎么办？" → 先查「阶段0 决策路由」，读工作区的 <box>-progress.md 进度文件再分流！
+❌ "我看到 X，可能是什么？" → 读工作区的 <box>-state.jsonl 键状态文件（见「key-state 规范」）！
+❌ "接下来怎么办？" → 先查「阶段0 决策路由」，读工作区的 <box>-state.jsonl 再分流！
 ❌ "我好像卡住了" → debug-5whys！
 ❌ 同一路径失败 ≥3 次 → 强制 debug-5whys
 ❌ AES256 Kerberoast → 不爆破，换委派路径
@@ -22,7 +22,7 @@ metadata: { domain: meta, tier: T1 }
 ❌ 攻击链已写在文档里 → 不自行"探索"已排除的死路
 🆕 ❌ 不看 --help 直接敲命令
 🆕 ❌ 凭记忆编 CVE 编号
-🆕 ❌ 手写反弹 shell（用进度文件模板）
+🆕 ❌ 手写反弹 shell（用 quickref-cards 里的模板：bash -i 与 mkfifo 两版）
 🆕 ❌ Windows 命令用 - 代替 /
 🆕 ❌ 模型说"X 有 Y 漏洞"不验证直接执行
 ```text
@@ -38,7 +38,7 @@ metadata: { domain: meta, tier: T1 }
 [3] 隧道方案: 只建一种 (首选 chisel SOCKS)，不混用
     验证: ss -tlnp | grep <端口> && ps aux | grep chisel
 
-[4] 凭据去交互: 拿到任何密码/TGT 立刻存文件，不每次手工输入
+[4] 凭据去交互: 拿到任何密码/TGT 立刻写 <box>-state.jsonl（cred 事件）+ 存 <box>-creds.txt，不每次手工输入
 
 [5] 已知链复用: 记忆中有完整链 → 逐步骤原样执行 → 卡住才分析
     🔴 已知链重打 = 变更检测，不是重扫:
@@ -114,7 +114,7 @@ metadata: { domain: meta, tier: T1 }
 ```yaml
 阶段0: 🔴 决策路由（先定模式，再分流）
         ├─ 用户指定纯自动化任务 → 走自动化主循环（阻断点1/2/3 仍适用）
-        ├─ 默认手动模式 → 读工作区 <box>-progress.md 进度文件（自己维护的进度笔记）
+        ├─ 默认手动模式 → 读本地笔记「<靶机名>」+ 工作区 <box>-state.jsonl（上次 run 键状态）
         │   ├─ 命中≥2 → 复用已知链，逐步骤原样执行
         │   └─ <2 → 加载 no-hint-solving（A–E 与进度文件阻断点4 二选一，不重复执行）
         └─ 两条路径切换必须显式声明，禁止中间态
@@ -150,11 +150,55 @@ metadata: { domain: meta, tier: T1 }
         └─ 第三问: 系统规则 — sudo精确匹配/cron PATH/AppArmor？
 阶段5: 收尾 → flag → 攻击链 → quirk 入库
         🔴 收尾强制三步（每台打完）:
-        [1] 记忆沉淀: 靶机名/完整攻击链/quirk 写入工作区笔记(<box>-complete.md)；
+        [1] 记忆沉淀: <box>-complete.md 由 <box>-state.jsonl 汇总生成（攻击链 = 按 ts 排序的 access/flag 事件；quirk = note 事件），不另写散文；
             有 memory MCP 的会话 → 实体+关系补建（先 search_nodes 查重，存在则 add_observations）
         [2] 技能反哺: 新 quirk/教训补进对应场景卡（场景命名优先）；改完跑 triage 校验
         [3] 变更复盘: 本次哪条规则"想到了没用/用了不对" → 记入下次收尾检查
 ```text
+
+## 🔴 key-state 规范（产物契约 — 进度不再写自由文本笔记）
+
+> 🔴 **所有关键事实写入 append-only 的 `<box>-state.jsonl`（工作区根目录，一行一事件）。这是判定层（flag/cred 捕获对抗复核）、断点续跑、收尾复盘的唯一事实来源。**
+
+### 文件与 schema
+
+```json
+{"ts":"ISO8601","type":"flag|cred|access|artifact|deadend|note","who":"<user>@<host>","what":"<一句话事实>","evidence":"<能重新产出该事实的确切命令>"}
+```
+
+| type | 什么时候写 | what 示例 | evidence 示例 |
+|------|-----------|----------|--------------|
+| `access` | 拿到 shell/会话 | Shell via flask SSTI (www-data@web01) | 建立会话的确切命令 |
+| `cred` | 拿到密码/hash/TGT/密钥 | postgres:postgres@web01 | `cat /var/www/app/.env` |
+| `flag` | 捕获 user/root flag | flag 值原文 | `cat /root/root.txt` |
+| `artifact` | 下载/发现关键文件 | 文件路径 + 用途 | 来源命令（scp/curl 等） |
+| `deadend` | 确认一条死路 | 路径 + 为何排除 | 判定命令（AES256 不可爆破 → hashcat 失败） |
+| `note` | quirk/配置变化/关键版本 | 一句话 | 观测命令 |
+
+示例:
+
+```json
+{"ts":"2026-06-05T10:22:13Z","type":"access","who":"www-data@web01","what":"Shell via flask SSTI","evidence":"curl -k 'https://10.129.1.2/run?x={{7*7}}'"}
+{"ts":"2026-06-05T10:31:02Z","type":"cred","who":"","what":"web01 postgres:postgres","evidence":"cat /var/www/app/.env"}
+{"ts":"2026-06-05T11:02:44Z","type":"flag","who":"root@dc","what":"ff2d090d7bde32f3744068a41f41204f","evidence":"cat /root/root.txt"}
+{"ts":"2026-06-05T11:05:12Z","type":"deadend","who":"","what":"AES256 kerberoast 不可爆破","evidence":"hashcat -m 18200 报密钥长度错误"}
+```
+
+### 写规则（机制层，不靠自觉）
+
+1. **append-only，事实发生后立即写**（落盘即交付）——禁止攒到收尾批量写；kill/崩溃最多丢最后一行，已写行即事实。
+2. **evidence 必须是可重放的命令**——判定层会重跑它验证（execution over claims，不信任叙述）。
+3. flag/cred 拿到就写，先写后判（存疑在 what 里注明「疑似」）。
+4. 写命令（JSON 内不要含单引号）：
+   `printf '%s\n' '{"ts":"...","type":"flag","who":"root@dc","what":"...","evidence":"..."}' >> <box>-state.jsonl`
+
+### 消费关系
+
+- 阶段5 收尾：`<box>-complete.md` 由 state.jsonl **汇总生成**（攻击链 = 按 ts 排序的 access/flag 事件；quirk = note 事件）。
+- 阶段0 续跑：读 state.jsonl 判断进度（access 事件数 = 已立足主机数；flag 事件 = 已捕获目标）。
+- 判定层/复盘：直接消费 state.jsonl，不读聊天记录。
+
+---
 
 ## 🔗 按需加载的专项 Skill（🔴 答案就在卡里：场景命中 → 先加载再动手）
 

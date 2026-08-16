@@ -319,6 +319,8 @@ rnames rns r-desc r-find r-show r-status rgroup-find r-enum rcontent radd
 rname-generation rname-anarchy rs-kerberos-only rsfile point-toolchain
 point-action k-v4-pro i686-w64-mingw32-gcc sslfactory mappings
 d6c93cbe006372adb8403630f9e86594f52c8105a52f9b21fef62e9c7a75e240
+# key-state 产物规范（box-startup）的事件类型词表：schema 词汇，非技能名
+access cred flag artifact deadend note key-state
 '''.split())
 
 # 卡名集合：以 frontmatter name 为准（skill 注册表按 name 加载）。
