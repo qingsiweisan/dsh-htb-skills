@@ -1,6 +1,6 @@
 ---
 name: 'voice-symbol-xss'
-description: 'XSS via voice-to-text symbol mapping：语音词''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''open bracket'''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''' → `<`。来源 Makesense whisper-wrapper.js。'
+description: 'XSS via voice-to-text symbol mapping：语音词''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''open bracket'''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''' → `<`。来源 Makesense whisper-wrapper.js。'
 disable-model-invocation: true
 metadata: { domain: web, tier: T3 }
 ---
