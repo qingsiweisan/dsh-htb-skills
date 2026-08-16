@@ -13,7 +13,7 @@ metadata: { domain: meta, tier: T1 }
 ## 触发条件
 
 ```
-知识图谱 mcp__memory__search_nodes 返回空或不相关 → 进入本协议
+在挂有 memory MCP 的机器上（Windows 教练会话）search 返回空或不相关 → 进入本协议；Kali 打靶机无此 MCP，等价物为读进度文件 + htb-skill-index 查卡
 类比机器 < 2 台 → 进入本协议
 ```
 
@@ -23,17 +23,18 @@ metadata: { domain: meta, tier: T1 }
 ❌ "可能是什么？" → 实验验证，不猜
 ❌ "你见过这个吗？" → 禁止问用户
 ❌ 翻 WP → 禁止
+例外：用户明确授权搜索某卡点的通用技术或 writeup 时，以用户最新指令为准
 ```
 
 ---
 
 ## 阶段 A：攻击面穷举（30 分钟内完成）
 
-### A1. 端口 → 服务 → 版本（两步，与 AGENTS.md 启动三步一致）
+### A1. 端口 → 服务 → 版本（两步）
 ```
-[1] 全端口发现 (PTY 方式): shell_send "nmap -p- -sS -T4 -v <IP> -oN /tmp/ports.txt"
-    → shell_read(idle_ms=300000) 等待完成 → 读取端口列表
-[2] 版本识别: nmap -sV -sC -p PORT1,PORT2,... <IP> (execute_command，≤30s)
+[1] 全端口发现 (PTY 方式): bash 工具 "nmap -p- -sS -T4 -v <IP> -oN /tmp/ports.txt"
+    → job_output 工具(idle_ms=300000) 等待完成 → 读取端口列表
+[2] 版本识别: nmap -sV -sC -p PORT1,PORT2,... <IP> (bash 工具，≤30s)
     → 🔴 禁止一步 nmap -sV -sC -p-（违反「发现/版本分开两步」规则，且 -sC -p- 极慢）
 对每个开放端口：curl/banner抓取 → 精确版本号
 ```

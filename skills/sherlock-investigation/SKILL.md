@@ -8,7 +8,7 @@ metadata: { domain: forensics, tier: T1 }
 
 # HTB Sherlocks 取证调查 playbook
 
-> 用法: `加载技能 sherlock-investigation`
+> 用法: 用 skill 工具按名加载 sherlock-investigation
 > 收到新 Sherlocks 题目时调用。传入完整场景描述，按题型路由到对应流程。
 
 ## 0. 环境准备（每次必做）
@@ -45,7 +45,7 @@ file + sha256sum → strings -n 4 → readelf -d（NEEDED 库）→ nm（未剥�
 ## 3. CTI 威胁画像（四步）
 
 ```
-1. 抓全报告: tavily_extract(advanced) 逐篇抓；截断 → Kali curl + python 去 HTML 标签
+1. 抓全报告: mcp__tavily__tavily_extract 逐篇抓；截断 → Kali curl + python 去 HTML 标签
    （re.sub(r"<[^>]+>", " ", raw) + html.unescape；TOC 干扰用 rfind 找正文起点）
 2. 提取事实表: 身份/别名/时间线/目标/动机/武器库(版本演进/C2变化/CVE)/基础设施/IOC/受害者
 3. 交叉关联: 同一组织不同厂商命名（Kaspersky "X" = Knownsec 404 "Y"）；武器溯源
@@ -92,5 +92,5 @@ file + sha256sum → strings -n 4 → readelf -d（NEEDED 库）→ nm（未剥�
 - **答案以原始材料为准**（报告原文/反汇编字节/kmsg），掩码长度是提示不是装饰
 - 做题过程随时把发现写入 ANALYSIS.md，逐题对照，避免答串
 - 提交后错题 → 回到对应证据重新核对，不要猜
-- 详细记忆（含答案速查）: phantom-ring-sherlock / cti-threat-profiling-sherlock / linux-memory-forensics-rootkit
-- 收尾: 新题型复盘 → remember 更新本 skill 对应章节
+- 详细记忆：恶意样本静态分析见 malware-static-analysis 卡；Sherlocks 答案速查卡待建（教练侧）
+- 收尾: 新题型复盘 → 更新本 SKILL.md 并重生成索引卡

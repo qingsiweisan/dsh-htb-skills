@@ -1,6 +1,6 @@
 ---
 name: 'cron-privesc-patterns'
-description: 'Cron Job Abuse 提权模式库：可写脚本/PATH劫持/通配符注入/日志投毒/@reboot + \U0001F195Git Template Sync路径穿越。来自20+台HTB机器统计。'
+description: 'Cron Job Abuse 提权模式库：可写脚本/PATH劫持/通配符注入/日志投毒/@reboot + 🆕Git Template Sync路径穿越。来自20+台HTB机器统计。'
 disable-model-invocation: true
 metadata: { domain: linux, tier: T2 }
 ---

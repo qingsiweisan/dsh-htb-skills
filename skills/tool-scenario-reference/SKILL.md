@@ -54,6 +54,8 @@ Get-ADObject -Identity "CN=RODC01,OU=Domain Controllers,DC=domain,DC=local" -Pro
 Set-ADObject -Identity "CN=RODC01,OU=Domain Controllers,DC=domain,DC=local" -Clear msDS-NeverRevealGroup
 ```
 
+（完整四步链见 rodc-privesc-chain 卡）
+
 ---
 
 ### MSSQL 攻击
@@ -76,6 +78,8 @@ REVERT;
 ```
 pbkdf2:sha256:600000$salt$hash  → hashcat -m 10900
 ```
+
+（完整链见 mssql-attack-chain 卡）
 
 ---
 

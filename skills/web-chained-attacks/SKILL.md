@@ -67,6 +67,7 @@ Stage 3: 云凭据链
   Admin panel → Gitea repo → git history → AWS keys
   AWS IAM → Secrets Manager → KMS decrypt → Root creds
 ```
+（深卡：http-request-smuggling）
 
 ## 模式 C：图数据库注入 + WebAuthn XSS + 消息队列 + LDAP（Sorcery）
 
@@ -85,6 +86,7 @@ Stage 3: Kafka Wire Protocol
 Stage 4: FreeIPA (Linux AD)
   HBAC rules + sudo rules + ipa-getkeytab
 ```
+（深卡：cypher-injection / webauthn-xss / kafka-pentesting / freeipa-pentesting）
 
 ## 模式 D：Mirth Connect → Localhost Service → Eval（Interpreter）
 
@@ -93,6 +95,7 @@ CVE-2023-43208 XStream Deserialization → RCE as mirth
 → mirth.properties 明文 DB 密码 → hash cracking → SSH
 → localhost root Python service eval() 注入 → root
 ```
+（无对应深卡）
 
 ## 模式 E：Git 泄露 + 字体工具链 CVE + setuptools（VariaType）
 
@@ -101,6 +104,7 @@ CVE-2023-43208 XStream Deserialization → RCE as mirth
 → CVE-2025-66034 fontTools CDATA injection → 写 webshell
 → CVE-2025-47273 setuptools path traversal → root
 ```
+（深卡：xml-attacks-beyond-xxe）
 
 ## 通用教训
 

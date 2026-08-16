@@ -7,7 +7,7 @@ metadata: { domain: creds, tier: T1 }
 
 # 密码攻击 & Hash 破解
 
-> 🔴 **拿到 hash 第一步：识别类型 → 搜 knowndbs → 查询是否已破解。不要直接跑 hashcat。**
+> 🔴 **拿到 hash 第一步：识别类型 → 搜 在线 hash 库（hashes.com） → 查询是否已破解。不要直接跑 hashcat。**
 
 ## 0. Hash 识别
 
@@ -199,6 +199,7 @@ hashcat -m 35400 asrep.txt nt_hashes.txt          # AS-REP + NT corpus
 hashcat -m 31600 dcc2.txt nt_hashes.txt           # DCC2 + NT corpus
 # 🔴 NT-candidate 不爆破 — 直接配对！多域环境密码复用率 40-60%
 ```
+（NT-candidate 系列详见 hash-shucking 卡）
 
 ---
 
@@ -208,7 +209,7 @@ hashcat -m 31600 dcc2.txt nt_hashes.txt           # DCC2 + NT corpus
 # 已知: 公司要求 1大写+1数字+1特殊 + 8字符
 hashcat --stdout -a 3 "Company?d?d?s" > custom.txt
 
-# 已知: 某用户的舊密码是 Spring2024! → 试 Spring2025!
+# 已知: 某用户的旧密码是 Spring2024! → 试 Spring2025!
 echo 'Spring2024!' > /tmp/base.txt
 hashcat -m 1000 hash.txt -a 6 /tmp/base.txt ?a?a?a?a       # 加后缀 (hybrid)
 echo 'Spring2025!' | hashcat -m 1000 hash.txt -r best64.rule # pipe 输入

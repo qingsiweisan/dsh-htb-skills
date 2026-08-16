@@ -185,7 +185,7 @@ hmac.new(operator_key, yaml_payload.encode(), hashlib.sha256).hexdigest()
 - YAML 缩进精度比 tag 格式更重要 → 2-space 是默认
 - Named Pipe 不只是 token 劫持 → 定制 IPC 协议有 HMAC/密钥派生/类型认证
 - 反序列化前先解认证 → 不只找 sink，要找进入 sink 的完整路径
-- 详见 deserialization-attacks (.NET ObjectDataProvider 通用 gadget)
+- 本卡即 .NET ObjectDataProvider 通用 gadget 的完整参考
 
 **Why:** Odyssey 的 \\.\pipe\AegisStreamMgmt 是定制 IPC + YAML 反序列化 + HMAC 认证的组合。YAML 缩进 2-space vs 1-space 导致 9 次失败。
 **How to apply:** 发现 named pipe → 枚举 IPC 协议 → 找到认证方式 → 找到反序列化 sink → 缩小版本测试 YAML 结构 → 最后 gadget RCE。

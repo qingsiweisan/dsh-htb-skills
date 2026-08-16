@@ -1,6 +1,6 @@
 ---
 name: 'parallel-recon'
-description: 'HTB 侦察并行化：并行子代理 逐端口并行探测 + 所有搜索/研究丢 subagent，保护主上下文'
+description: 'HTB 侦察并行化：subagent 工具（后台并行）逐端口并行探测 + 所有搜索/研究丢 subagent，保护主上下文'
 whenToUse: '侦察阶段：并行端口探测 + 所有搜索/研究丢给子代理，保护主上下文。'
 metadata: { domain: meta, tier: T1 }
 ---
@@ -13,8 +13,8 @@ metadata: { domain: meta, tier: T1 }
 ## 触发时机
 
 ```
-[1] 拿到全端口列表 + 版本识别结果后 → 立即 并行子代理 并行探测（不等串行）
-[2] 任何需要搜索 CVE/PoC/技术资料 → 一律 subagent（research/task），禁止在主线程多轮搜
+[1] 拿到全端口列表 + 版本识别结果后 → 立即用 subagent 工具（后台并行）并行探测（不等串行）
+[2] 任何需要搜索 CVE/PoC/技术资料 → 一律 subagent 任务，禁止在主线程多轮搜
 [3] 任何预计 >300 行输出的工具 → subagent 跑完只回摘要
 ```
 
@@ -23,11 +23,11 @@ metadata: { domain: meta, tier: T1 }
 ### 流程
 ```
 1. nmap -p- 完成 → 提取端口列表 → nmap -sV -sC 版本识别（主线程，30s）
-2. 按端口分组 → 并行子代理 并行任务（每个任务 1-2 个端口，read-only）
+2. 按端口分组 → subagent 工具（后台并行）并行任务（每个任务 1-2 个端口，read-only）
 3. 收集各任务摘要 → 主线程拼"信息汇总表" → 才进入决策
 ```
 
-### 并行子代理 任务提示词模板
+### subagent 工具（后台并行）任务提示词模板
 ```
 你是 HTB 侦察子代理，目标 {IP}，端口 {PORT}（{SERVICE} {VERSION}）。
 跑以下只读探测并返回发现摘要：
@@ -42,9 +42,8 @@ metadata: { domain: meta, tier: T1 }
 ### 规则
 ```
 🔴 每个任务 self-contained：提示词里给全 IP/端口/服务/版本，subagent 无主上下文
-🔴 并行子代理 任务用 read_only=true（探测只读，不写文件）
 🔴 多端口归组：同服务类型（如多个 HTTP）合成 1 个任务，避免重复跑 gobuster
-🔴 汇总表由主线程拼（AGENTS.md 网状枚举铁律的"信息汇总表"）
+🔴 汇总表由主线程拼（信息汇总表）
 ```
 
 ## 模式 B：搜索/研究 subagent 化（贯穿全阶段）
@@ -57,7 +56,7 @@ metadata: { domain: meta, tier: T1 }
 - 逆向/反混淆类任务（如 javascript-obfuscator 反混淆）
 ```
 
-### research/task 提示词模板
+### subagent 任务提示词模板
 ```
 搜索 {软件} {版本} 的已知漏洞与可用 PoC：
 1. searchsploit + Tavily/Bing: "{软件} {版本} CVE"（不加年份限制）
@@ -83,5 +82,5 @@ metadata: { domain: meta, tier: T1 }
 ❌ 串行逐端口探测 → 端口多时浪费大量轮次
 ```
 
-**Why:** HTB 侦察+搜索是上下文消耗大户；并行子代理/task/research 提供隔离执行，只回结论。
-**How to apply:** 版本扫描完成 → 立即模式 A；任何搜索需求 → 立即模式 B。与 AGENTS.md 阻断点2 配合（端口探测表在 service-attacks skill）。
+**Why:** HTB 侦察+搜索是上下文消耗大户；subagent 工具（后台并行）提供隔离执行，只回结论。
+**How to apply:** 版本扫描完成 → 立即模式 A；任何搜索需求 → 立即模式 B。与 blocking-points-detail 卡 配合（端口探测表在 service-attacks skill）。

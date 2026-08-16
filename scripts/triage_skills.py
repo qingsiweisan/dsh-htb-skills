@@ -121,6 +121,7 @@ MAPPING = {
     'sudo-escape-techniques': ('linux', 'T2'),
     'cve-2024-47533-cobbler-rce': ('linux', 'T3'),
     'cve-2026-53359-januscape-kvm-escape': ('linux', 'T3'),
+    'codebuild-floci-escape': ('linux', 'T3'),
     'git-object-path-traversal': ('linux', 'T3'),
     'noncontainer-sandbox-escape': ('linux', 'T3'),
     'overlayfs-privesc': ('linux', 'T3'),

@@ -21,34 +21,38 @@ metadata: { domain: network, tier: T1 }
 | 79 | Finger | finger 用户枚举 |
 | 110/995 | POP3 | 邮件枚举 + 弱密码 |
 | 111 | RPC | rpcclient 枚举 |
-| 139/445 | SMB | 匿名共享 / smbclient / SCF hash 窃取 |
+| 139/445 | SMB | 匿名共享 / smbclient / SCF hash 窃取（详见 scf-ntlm-theft 卡） |
 | 143/993 | IMAP | 邮件枚举 + 弱密码 |
 | 161 | SNMP | snmpwalk 信息泄露 |
 | 389 | LDAP | 匿名 bind → ldapsearch 枚举 |
 | 623 | IPMI | hashcat -m 7300 爆 BMC 密码 |
-| 631 | IPP/CUPS | 打印机服务 → CUPS 漏洞 |\n| 515/1515 | LPD | 🔴 RFC 1179 → 控制文件 J 字段注入 (shell=True) → paperwork-box |\n| 873 | rsync | 匿名模块列举 → 下载 |
+| 631 | IPP/CUPS | 打印机服务 → CUPS 漏洞 |
+| 515/1515 | LPD | 🔴 RFC 1179 → 控制文件 J 字段注入 (shell=True) |
+| 873 | rsync | 匿名模块列举 → 下载 |
 | 1099 | Java RMI | RMI 枚举 → 反序列化 |
 | 1433 | MSSQL | xp_cmdshell / UNC injection → mssql-attack-chain |
 | 1521 | Oracle DB | oscanner / ODAT 爆破 + 提权 |
 | 2049 | NFS | showmount → no_root_squash |
-| 2375 | Docker API | 未认证 → 容器逃逸 |
+| 2375 | Docker API | 未认证 → 容器逃逸（完整命令见下文 Docker API 速查） |
 | 3000 | Grafana | CVE-2021-43798 LFI / 默认凭据 |
 | 3306 | MySQL | UDF 提权 / FILE 读写 |
 | 3389 | RDP | xfreerdp / NLA 绕过 |
-| 4840 | OPC UA | 工业协议 → helix-box |
+| 4840 | OPC UA | 工业协议 → opcua-client/python-opcua 枚举 |
 | 5432 | PostgreSQL | RCE: COPY FROM PROGRAM / UDF → postgresql-rce |
 | 5900 | VNC | 弱密码 + vncviewer |
 | 5985 | WinRM | evil-winrm PtH/密码 |
 | 5984 | CouchDB | NoSQL → CVE-2017-12635 创建 admin |
 | 6379 | Redis | 无认证 → 写 SSH key/webshell/crontab |
-| 1883/8883 | MQTT | 🆕 匿名订阅泄露 / 弱密码喷洒 → mqtt-pentesting |
+| 1883/8883 | MQTT | 🆕 匿名订阅泄露 / 弱密码喷洒 → 详见本卡 MQTT 小节 |
 | 6443/10250| K8s API | SA token 枚举 → container-escape |
 | 8009 | AJP | Ghostcat CVE-2020-1938 文件读取 |
 | 8080/50000| Jenkins | 默认凭据 / Script Console RCE |
 | 8089 | Splunk | 默认凭据 / Custom App RCE |
 | 8200 | Vault | Unseal → Key/Value → 横向 |
 | 8983 | Solr | Velocity Template RCE |
-| 9090 | Prometheus | 元数据泄露 / 无认证 |\n| 9100 | PJL/JetDirect | 🔴 @PJL FSUPLOAD/FSDOWNLOAD → 路径穿越 → 文件读写。外部不可达时检查 localhost → paperwork-box |\n| 9200 | Elasticsearch | 无认证 → dump 数据 |
+| 9090 | Prometheus | 元数据泄露 / 无认证 |
+| 9100 | PJL/JetDirect | 🔴 @PJL FSUPLOAD/FSDOWNLOAD → 路径穿越 → 文件读写。外部不可达时检查 localhost |
+| 9200 | Elasticsearch | 无认证 → dump 数据 |
 | 11211 | Memcached | 无认证 dump → session/token |
 | 27017 | MongoDB | 无认证 → dump 数据库 |
 | 61616 | ActiveMQ | CVE-2023-46604 反序列化 RCE |
@@ -681,7 +685,7 @@ curl -k https://<IP>:10250/pods
 ```
 # 工业协议 — Helix HTB 案例
 # 工具: opcua-client / python-opcua
-# 详见 helix-box
+# 用 opcua-client/python-opcua 枚举节点与变量 → 找敏感信息/凭据
 ```
 
 ### PostgreSQL (5432) / MSSQL (1433)
@@ -752,8 +756,8 @@ nmap -p 443 --script ssl-heartbleed,ssl-poodle IP
 | 🔴 21 | DNS zone transfer | dig axfr → 子域/IP 全泄露 |
 | 🟠 22 | MySQL root 无密码 | UDF 提权 / SELECT INTO OUTFILE 写 webshell |
 | 🟡 23 | Oracle tns 开放 | oscanner → ODAT |
-| 🔴 24 | LPD 1515 shell=True | J 字段注入 → paperwork-box |
-| 🔴 25 | PJL 9100 路径穿越 | FSUPLOAD/FSDOWNLOAD → SSH key 投递 → paperwork-box |
+| 🔴 24 | LPD 1515 shell=True | J 字段注入 → 反弹 shell |
+| 🔴 25 | PJL 9100 路径穿越 | FSUPLOAD/FSDOWNLOAD → SSH key 投递 |
 
 ## 反模式
 
@@ -808,7 +812,7 @@ s.close()
 # ① 控制文件子命令格式: \x02 + 字节数(ASCII) + 空格 + cfA + 作业号 + 主机名 + \n
 # ② 注入用 ; 无条件分隔，不要用 || (echo 返回 0)
 # ③ 下载的 server.py 可能有 bug (缺 import)，不代表运行版本
-# 详见 paperwork-box
+# 要点: J 字段 shell=True 注入 → 直接反弹 shell（Popen 非阻塞，用 OOB 验证）
 ```
 
 ## 🆕 PJL / JetDirect (9100)
@@ -844,5 +848,5 @@ s.close()
 # ROOT → ps aux | grep 服务名 看 cmdline
 # 从少到多试: ../ → ../../ → ../../../
 # FSDOWNLOAD → os.makedirs(dirname, exist_ok=True) → 自动创建目录!
-# 详见 paperwork-box
+# 要点: FSDOWNLOAD 写 .ssh/authorized_keys → SSH 直连
 ```

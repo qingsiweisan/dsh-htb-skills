@@ -30,7 +30,7 @@ metadata: { domain: ad-win, tier: T1 }
     └─ .vmem/.vmdk/.vhd/.sav/.vmsn → VMkatz 直接提取
 
 [ ] 有 ADCS？
-    └─ certipy find -vulnerable → ESC1-13
+    └─ certipy find -vulnerable → ESC1-13（与 ad-checklist 一致）
 
 [ ] 都无？
     └─ 传统 Kerberoast / ASREP / 爆破
@@ -40,11 +40,13 @@ metadata: { domain: ad-win, tier: T1 }
 
 | 条件 | 攻击 | 工具 | 速度 |
 |------|------|------|------|
-| KDS + CreateChild + GenericWrite | BetterSuccessor | bloodyAD/badS4U2self | 30秒 |
+| KDS + CreateChild + GenericWrite | BetterSuccessor | bloodyAD/badS4U2self（社区 PoC 名，与 ad-checklist 的 SharpSuccessor 同源，以实际工具为准） | 30秒 |
 | GenericWrite | Shadow Credentials | certipy/bloodyAD | 1分钟 |
 | .vmem/.vmdk 文件 | VM 取证 | VMkatz | 2分钟 |
 | 用户有 SPN | Kerberoast | Rubeus/GetUserSPNs | 需爆破 |
-| ADCS 存在 | ESC1-13 | certipy | 5分钟 |
+| ADCS 存在 | ESC1-13（与 ad-checklist 一致） | certipy | 5分钟 |
+
+> 详细命令见 ad-checklist 卡
 
 ## 核心原则
 1. **爆破永远是最后选项**

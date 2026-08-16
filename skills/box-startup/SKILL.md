@@ -13,16 +13,16 @@ metadata: { domain: meta, tier: T1 }
 ## ⛔ 禁止行为
 
 ```
-❌ "我看到 X，可能是什么？" → 查 KG/memory！
-❌ "接下来怎么办？" → 先查「阶段0 决策路由」：未进入 auto-pwn 模式 → 查 KG/memory；已进入 → 走 auto-pwn 主循环！
-❌ "我好像卡住了" → /debug-5whys！
+❌ "我看到 X，可能是什么？" → 读 /root/htb/<box>-progress.md 进度文件（教练快照）！
+❌ "接下来怎么办？" → 先查「阶段0 决策路由」，读 /root/htb/<box>-progress.md 进度文件（教练快照）再分流！
+❌ "我好像卡住了" → debug-5whys！
 ❌ 同一路径失败 ≥3 次 → 强制 debug-5whys
 ❌ AES256 Kerberoast → 不爆破，换委派路径
 ❌ 工具第一次认证失败 → 先查「工具局限表」确认是否支持此认证方式
 ❌ 攻击链已写在文档里 → 不自行"探索"已排除的死路
 🆕 ❌ 不看 --help 直接敲命令
 🆕 ❌ 凭记忆编 CVE 编号
-🆕 ❌ 手写反弹 shell（用 AGENTS.md 模板）
+🆕 ❌ 手写反弹 shell（用进度文件模板）
 🆕 ❌ Windows 命令用 - 代替 /
 🆕 ❌ 模型说"X 有 Y 漏洞"不验证直接执行
 ```
@@ -79,22 +79,7 @@ metadata: { domain: meta, tier: T1 }
 | `KDC_ERR_PADATA_TYPE_NOSUPP` | KDC 无 CA | 换 RBCD 路径 |
 | `KRB_AP_ERR_SKEW` | 时钟偏差 | `ntpdate -b <DC_IP>` |
 | `KRB_AP_ERR_MODIFIED` (SOCKS) | SOCKS 破坏 Kerberos | 换直接端口转发或本地操作 |
-| chisel 端口通但数据断流 | chisel 进程已死 | `ps aux \| grep chisel` 验证后重建 |
-| `STATUS_USER_SESSION_DELETED` | ccache 过期/时钟偏差 | 同步时钟 + 刷新 TGT |
-| `certipy shadow auto` 返回 `None` | 加了 `-dc-host` | **去掉 `-dc-host`**，只用 `-target` |
-| dnstool.py NXDOMAIN (SOA) | Kali DNS 不能解析域 | `echo "nameserver <DC_IP>" > /etc/resolv.conf` |
-| WUA XML 0x8024000E | WSUS SOAP `&` 未转义 | `html.escape(html.escape(cmd))` |
-| WSUS Broken pipe | GetConfigResponse 不完整 | 用 PyWSUS 模板，不手搓 |
-| 命令注入返回 `\x00` 无效果 | Popen 非阻塞 / `\|\|` vs `;` | 先查 subprocess 调用方式，用 `;` 分隔 |
-| 目录有 `exploit_*.py` 被忽略 | 旧 exploit 没被发现 | 🔴 先跑已有脚本再试其他 |
-| 🆕 WCF/SOAP 返回 400/500 | 缺 SOAPAction header | `curl -X POST URL -H 'SOAPAction: "urn:IService/M"'` |
-| 🆕 nxc PowerShell 无输出 | stdout 被吞，不是失败 | xec output → 写文件 → type; 或用 evil-winrm |
-| 🆕 relay 反复失败 (Server 2022+) | EPA 默认开启, relay 不可行 | 放弃 relay → 直接 PtH/PtT/Kerberoast |
-| 🆕 PTY 退出后后台进程死 | socat PTY kill bg jobs | 双 session: session1 前台, session2 后台 |
-| 🆕 `IS_SRVROLEMEMBER('sysadmin')` = 0 | 只答"我是谁"，不答"谁是" | 查 `sys.server_role_members` 完整成员表（Signed: SIGNED\IT 是 sysadmin 但 IS_SRVROLEMEMBER 全 0） |
-| 🆕 `net use \\host:port\share` error 67 | SMB UNC 不支持端口 | relayx 必须监听 445，诱导 UNC 不带端口 |
-| 🆕 外部全封 + 已拿 RCE | 网络不可达≠死路 | ★立即 chisel SOCKS 隧道 → proxychains 访问内部端口（Signed: relay 走隧道=受害者自己连自己） |
-| 🆕 同一畸形 DNS 名重复诱导失败 | LSASS NTLM 认证缓存 | 换等效名（dc011UWhRC.../localhost1UWhRC.../signed1UWhRC...）或等待 |
+| （完整粘滞点表见 blocking-points-detail 卡） | | |
 
 ## 🆕 困境分类 → 记忆映射表（卡住时先输出标签再动手）
 
@@ -103,11 +88,11 @@ metadata: { domain: meta, tier: T1 }
 
 | 困境类型 | 自动 recall 应命中的记忆 |
 |----------|------------------------|
-| 网络可达性/端口全封 | `tunneling-port-forwarding`（隧道）/ `signed-box`（CVE-2025-33073 反射链）/ `blackbox-fuzz-internal-services` |
-| 权限不足（提权） | `linux-privesc-checklist` / `windows-privesc` / `userspace-privesc-enum` / `cohort-box` |
+| 网络可达性/端口全封 | `tunneling-port-forwarding`（隧道）/ `unknown-service-probe` |
+| 权限不足（提权） | `linux-privesc` / `windows-privesc` |
 | 认证失败（AD） | `mssql-attack-chain` / `ntlm-relay-chain` / `kerberos-only-ad` / `adcs-attack-chain` |
 | 信息缺失/方向未知 | `enumeration-command-layer` / `unknown-service-probe` / `attack-surface-meta` / `no-hint-solving` |
-| 工具行为异常 | `blocking-points-detail`（三问表）/ `derive-command` / `netexec-escaping-guide` |
+| 工具行为异常 | `blocking-points-detail`（三问表）/ `derive-command` / `netexec-escape` |
 | SQL/MSSQL 相关 | `mssql-attack-chain`（含 SUSER_SID 取域SID + sys.server_role_members 完整查询） |
 
 ## 🆕 不直觉的触发规则（保留 5 条）
@@ -128,15 +113,15 @@ metadata: { domain: meta, tier: T1 }
 
 ```
 阶段0: 🔴 决策路由（先定模式，再分流）
-        ├─ 用户指定 auto-pwn / 纯自动化任务 → 走 auto-pwn (orch_next 驱动；阻断点1/2/3 仍适用)
-        ├─ 默认手动模式 → KG + memory 查询
+        ├─ 用户指定纯自动化任务 → 走自动化主循环（阻断点1/2/3 仍适用）
+        ├─ 默认手动模式 → 读 /root/htb/<box>-progress.md 进度文件（教练快照）
         │   ├─ 命中≥2 → 复用已知链，逐步骤原样执行
-        │   └─ <2 → 加载 no-hint-solving（A–E 与 AGENTS.md 阻断点4 二选一，不重复执行）
+        │   └─ <2 → 加载 no-hint-solving（A–E 与进度文件阻断点4 二选一，不重复执行）
         └─ 两条路径切换必须显式声明，禁止中间态
-        🆕 🔴 todo_write 开局: 建 9 步阶段清单（映射 htb-workflow）→ 每步完成 complete_step 签收
-阶段1: nmap 两步扫描 (PTY 全端口 → execute_command 版本识别，禁 masscan) → 🔴 阻断点2: 侦察字典 (每个端口跑固定探测，不靠LLM探索)
+        🆕 🔴 todo_write 开局: 建 9 步阶段清单（映射 htb-workflow）→ 每步完成 todo_write 工具 签收
+阶段1: nmap 两步扫描 (PTY 全端口 → bash 工具 版本识别，禁 masscan) → 🔴 阻断点2: 侦察字典 (每个端口跑固定探测，不靠LLM探索)
         🆕 🔴 并行子代理/parallel-recon 强制: 版本扫描后，端口探测+搜索全部丢 subagent（2-8 并行）
-            → 主上下文只收结论摘要，细节 read_subagent_result 按需取（Hercules: 串行灌爆上下文压缩3-4次）
+            → 主上下文只收结论摘要，细节 subagent 返回结果 按需取（Hercules: 串行灌爆上下文压缩3-4次）
         ├─ HTTP/S → whatweb + gobuster + ffuf vhost + curl headers
         ├─ SMB → nxc 匿名 + smbclient 枚举
         ├─ 其他端口 → 查侦察字典表逐项执行
@@ -174,7 +159,7 @@ metadata: { domain: meta, tier: T1 }
 
 ## 🔗 按需加载的专项 Skill
 
-> 🔴 **不自动加载。agent 按需调用 `read_skill("<name>")`。**
+> 🔴 **不自动加载。agent 按需用 skill 工具加载 <name>。**
 
 | 场景 | Skill | 关键内容 |
 |------|-------|---------|

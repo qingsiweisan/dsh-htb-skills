@@ -21,58 +21,54 @@ https://en.wikipedia.org/wiki/Five_whys
 
 ### ① 定义失败点（精确到一步）
 ```
-❌ "容器逃逸失败"
-✅ "CodeBuild BUILD phase: Exit code 128 OCI runtime exec failed"
+❌ "提权失败"
+✅ "SUID 二进制运行后仍返回普通用户 shell"
 ```
 
-### ② 5 Whys 追问链
+### ② 5 Whys 追问链（示例：SUID 提权失败）
 ```
-Why 1: 为什么 BUILD 失败？
-  → OCI runtime exec failed: 容器已停止
+Why 1: 为什么 SUID 二进制没给 root？
+  → 它 setuid(0) 后立刻又 drop 回原 uid
 
-Why 2: 为什么容器停止了？
-  → init 命令没有成功保持容器 alive
+Why 2: 为什么 drop 回原 uid？
+  → 脚本先解析了环境变量再 setuid
 
-Why 3: 为什么 init 命令 (tail -f /dev/null) 没成功？
-  → 前面的 mkdir -p /codebuild 失败了
+Why 3: 为什么环境变量能影响 setuid 顺序？
+  → 脚本用 system() 调外部命令，PATH 可控
 
-Why 4: 为什么 mkdir 失败？
-  → 没有权限在 / 下创建目录
+Why 4: 为什么 PATH 可控却没生效？
+  → 改了 PATH 但没 export，子进程继承不到
 
-Why 5: 为什么没有权限？容器不是 privileged mode 吗？
-  → entrypoint.sh 用 gosu floci 降权了，privileged 只给 cap 不改 uid
+Why 5: 为什么没 export？
+  → 复制的命令少了 export，子进程用了默认 PATH
 ```
 
 ### ③ Why 5 改造 — 追问到"可操作的根因"
 ```
-标准 5 Whys 可能在 Why 5 停住（"entrypoint 降权了"）
+标准 5 Whys 可能在 Why 5 停住（"PATH 没 export"）
 HTB 版继续:
 
-Why 6: 有没有东西能绕过 entrypoint 降权？
-  → 检查 entrypoint.sh: 它用 id 命令检查当前用户
+Why 6: 有没有其他 SUID 二进制有同样问题？
+  → 逐个读 SUID 脚本的 system() 调用点
 
-Why 7: 能不能控制 id 的返回值？
-  → BASH_FUNC_id%% 可以注入 bash 函数劫持 id
-
-Why 8: BASH_FUNC_id%% 在原始脚本里吗？
-  → 在。但我把它删了，以为是 cosmetic。
+Why 7: 能不能改脚本读取的配置文件？
+  → 配置文件可写 → 注入命令 → setuid 前执行
 ```
 
 ### ④ 假设审计（5 Whys 的补充）
 5 Whys 的已知弱点：无法超越当前知识边界。补一个步骤：
 ```
 列出所有"已被排除的假设"及其排除依据:
-[ ] BASH_FUNC_id%% → 依据: "看起来是cosmetic" → 🔴 弱！重新验证
-[ ] 镜像问题 → 依据: "旧session能跑" → 🟡 需要确认版本
+[ ] SUID 二进制本身 → 依据: "没输出" → 🔴 弱！重新验证
+[ ] PATH 已 export → 依据: "我以为改了" → 🟡 需要确认
 ```
 
 ### ⑤ 二分验证
 ```
 取因果链中间一步，实验验证：
-→ 先跑不含 modprobe 的命令序列 (echo hello)
-→ BUILD 能 SUCCEEDED 吗？
-→ 能 → 问题在后面
-→ 不能 → 问题在容器生命周期本身
+→ 先手跑 SUID 二进制，观察 uid 是否变化
+→ 变成 root 了？→ 问题在后面的命令注入
+→ 没变？→ 问题在 setuid 顺序/脚本逻辑本身
 ```
 
 ## 5 Whys 的批评与应对
@@ -82,13 +78,3 @@ Why 8: BASH_FUNC_id%% 在原始脚本里吗？
 | 无法超越当前知识 | 假设审计步骤，强制重审"已排除"项 |
 | 不同人会问出不同根因 | 用实验验证每一步，不依赖直觉 |
 | 倾向单一根因 | 接受可能有多个阻断点，并行修复 |
-
-## Nimbus 实战示例
-```
-失败点: BUILD:FAILED, OCI exec
-Why 1-3 → 容器 init 失败
-Why 4 → mkdir 权限
-Why 5 → gosu floci 降权
-Why 6-7 → BASH_FUNC_id%% 可绕过
-结论: 脚本对，我删错了。修复: 保留 BASH_FUNC, 换新 project 名
-```

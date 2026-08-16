@@ -59,4 +59,4 @@ impacket-secretsdump -k -no-pass 'dom/Administrator@dc.dom' -dc-ip <DC>   # DCSy
 - HackTricks: resource-based-constrained-delegation（"Authenticate with NT hash... changepasswd.py -newhashes"）
 - NetExec Wiki delegation: `nxc smb DC --use-kcache --delegate Administrator --u2u`
 - Medium "A Practical Guide to RBCD Exploitation"（U2U ticket 加密机制）
-- 关联: Hercules 靶机复盘记录（hercules-progress）
+- 关联: Hercules 靶机复盘记录

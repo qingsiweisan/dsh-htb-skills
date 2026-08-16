@@ -1,6 +1,6 @@
 ---
 name: 'windows-privesc'
-description: 'Windows 本地提权检查表：特权令牌→服务→UAC→DLL劫持→凭据→内核CVE→自动化。含 2025-2026 最新 CVE。'
+description: 'Windows 本地提权检查表：特权令牌→服务→UAC→DLL劫持→凭据→内核CVE→自动化。含 2025-2026 CVE 清单（未验证，需自校）。'
 whenToUse: '拿到 Windows shell 后本地提权：特权令牌→服务→UAC→DLL 劫持→凭据→内核 CVE。'
 metadata: { domain: ad-win, tier: T1 }
 ---
@@ -13,13 +13,15 @@ metadata: { domain: ad-win, tier: T1 }
 ## 快速索引
 | 场景 | 跳转 |
 |------|------|
-| 刚拿 shell | §0 容器检测 → §7 自动化 (winpeas) |
-| 有特权令牌 (SeImpersonate等) | §1 特权令牌 → Potato 系列 |
-| 有服务修改权限 | §2 服务劫持 |
+| 刚拿 shell | §0 容器检测 → §2 信息收集 |
+| 有特权令牌 (SeImpersonate等) | §3 特权令牌 → Potato 系列 |
+| 有服务修改权限 | §3 服务劫持 |
 | AlwaysInstallElevated | §3 UAC 绕过 |
-| 有 DLL 劫持点 | §4 DLL 劫持 |
-| 需要搜密码 | §5 凭据搜集 |
-| 内核版本已知 | §6 内核 CVE |
+| 有 DLL 劫持点 | §3 DLL 劫持 |
+| 需要搜密码 | §4 凭据搜集 |
+| 内核版本已知 | §1 内核 CVE |
+| 自动化枚举 | §6 自动化工具 (winpeas) |
+| 在容器内 | §7 容器逃逸 |
 
 ## 0. 容器环境检测（拿 shell 第一毫秒！）
 
@@ -34,6 +36,8 @@ metadata: { domain: ad-win, tier: T1 }
 ```
 
 ## 1. 2025-2026 通杀内核提权（优先！）
+
+⚠️ 以下 CVE 编号未逐条验证，使用前必须 searchsploit / CVE 库确认存在性，避免幻觉编号浪费时间
 
 ```
 [ ] CVE-2025-62215: Windows Kernel 竞态条件 → SYSTEM（已野外利用，CVSS 7.0）
@@ -195,7 +199,7 @@ metadata: { domain: ad-win, tier: T1 }
 [ ] winPEAS.exe / winPEAS.bat              # 全面枚举
 [ ] PowerUp.ps1 (Invoke-AllChecks)         # 快速配置检查
 [ ] Seatbelt.exe -group=all                # C# 全量检查
-[ ] Watson.exe / Windows-Exploit-Suggester  # 内核 CVE 匹配
+[ ] Watson.exe（过时，现代用 WES-NG / PrivescCheck.ps1）/ Windows-Exploit-Suggester  # 内核 CVE 匹配
 [ ] PrivescCheck.ps1                       # 现代 PowerUp 替代
 ```
 

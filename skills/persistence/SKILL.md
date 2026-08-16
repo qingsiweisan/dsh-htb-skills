@@ -221,6 +221,7 @@ copy payload.exe "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\StartUp\"
 # 找缺失 DLL 路径 → 放置恶意 DLL → 每次启动触发
 # 常见目标: OneDrive / Teams / Cortana 等自启动应用的缺失 DLL
 ```
+（详见 dll-hijacking-practical 卡）
 
 ### 2.7 COM Hijacking
 
@@ -254,16 +255,18 @@ reg add "HKLM\Software\Microsoft\Windows NT\CurrentVersion\Winlogon" /v Shell /t
 # 🔴 高风险: Userinit 出错 → 用户无法登录！备份原值再改
 ```
 
-### 2.8 域持久化
+### 2.10 域持久化
 
 ```
 # Golden Ticket → krbtgt hash → 无限期 TGT
 # Silver Ticket → 服务账户 hash → 特定服务 TGS
 # Skeleton Key → LSASS 注入 → 任何密码都通过
 - 🆕 AdminSDHolder → adminsdholder-abuse — 添加 ACE → SDProp 自动传播到所有受保护组
-# DCShadow → 临时 DC → 推恶意属性
-# DSRM 密码 → 恢复模式 DA
+# DCShadow → 临时 DC → 推恶意属性（详见 dcshadow 卡）
+# DSRM 密码 → 恢复模式 DA（详见 dsrm-credentials 卡）
 ```
+
+（SID History 见 sid-history-injection，RODC 见 rodc-privesc-chain，横向移动见 lateral-movement 卡）
 
 ---
 

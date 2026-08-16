@@ -17,12 +17,16 @@ metadata: { domain: web, tier: T1 }
 |-----------|------|------|
 | 插件 LFI | Social Warfare 插件 RCE (CVE-2019-9978) | Backdoor |
 | CVE-2022-0739 | BookingPress SQLi | MetaTwo |
-| CVE-2023-41425 | WonderCMS XSS→RCE (实际上 WonderCMS 是独立 CMS) | Sea |
 | 主题编辑 | admin → Theme Editor → 写 PHP | Curling, Blocky |
 | 弱密码 + 插件上传 | admin:admin → 上传恶意插件 | — |
 | GiveWP CVE | 捐赠插件 RCE | Giveback (Hard) |
 | xmlrpc.php | 暴力破解 / SSRF | — |
 | wp-config.php 泄露 | 备份文件 / LFI | — |
+
+### WonderCMS
+| CVE / 技术 | 描述 | 机器 |
+|-----------|------|------|
+| CVE-2023-41425 | XSS→RCE | Sea |
 
 ### Joomla
 | CVE / 技术 | 描述 | 机器 |

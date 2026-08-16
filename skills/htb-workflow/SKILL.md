@@ -21,7 +21,7 @@ metadata: { domain: meta, tier: T1 }
 [6] 特权账户: 证书服务(ESC3/ESC8) / 解 adminCount 保护 → 服务账户密码重置
 [7] 域控路径: RBCD（含 SPN-less U2U）→ 机器账户控制 → 提权服务账户
 [8] Domain Admin: Administrator TGS → DCSync → 全量 hash
-[9] 收尾: 双 flag（🔴 搜全盘非默认位置）+ 恢复被改密码 + 入 KG
+[9] 收尾: 双 flag（🔴 搜全盘非默认位置）+ 恢复被改密码 + 沉淀进记忆图谱（教练侧）
 ```
 
 ---
@@ -32,17 +32,17 @@ metadata: { domain: meta, tier: T1 }
 > 来源：Hercules 教训 — 全程串行在主上下文跑工具，tool output 灌爆上下文导致压缩 3-4 次。
 
 ```
-[0] 开局: todo_write 建 9 步清单（映射本 skill）→ 每完成一步 complete_step 签收
+[0] 开局: todo_write 建 9 步清单（映射本 skill）→ 每完成一步 todo_write 工具 签收
 [1] 侦察: nmap 版本扫描后 → 并行子代理/parallel-recon 并行探测（2-8 个 subagent）
     ├─ 每个端口探测 = 1 个 subagent 任务
     ├─ CVE/技术搜索（searchsploit/tavily/GitHub）= 独立 subagent
-    └─ 主上下文只收"结论摘要"，细节 read_subagent_result 按需取
+    └─ 主上下文只收"结论摘要"，细节 subagent 返回结果 按需取
 [2] 卡住（同方向 ≥2 次失败）→ 强制三查（缺一不可）:
-    memory search "<错误码/技术词>" + history search "<错误码>" + KG search_nodes
-    → 输出困境分类标签（阻断点6 格式）→ 才允许继续
+    memory search "<错误码/技术词>" + history search "<错误码>" + memory MCP search（仅 Windows 教练会话有）
+    → 输出困境分类标签（格式见 blocking-points-detail 卡）→ 才允许继续
 [3] 读文档/WP/网页 → web_fetch 优先（禁止 curl+python 硬解析 HTML）
 [4] 发现类命令输出 → 全量 > out.txt 完整读，禁止 tail/head 截断
-[5] 长命令/交互 → PTY；短命令（≤30s）→ execute_command
+[5] 长命令/交互 → PTY；短命令（≤30s）→ bash 工具
 ```
 
 ---
@@ -52,7 +52,7 @@ metadata: { domain: meta, tier: T1 }
 ```
 产出: 一张端口×服务×版本×攻击面表格 + 每个可疑点标记 [PENDING]
 动作:
-  - nmap 两步扫描（box-startup 阶段1）→ 阻断点2 逐端口探测（并行 subagent）
+  - nmap 两步扫描（box-startup 阶段1）→ 逐端口探测（见 blocking-points-detail 卡，并行 subagent）
   - 🔴 自研 Web 应用（非 Apache/IIS 默认页）→ 优先攻击：
       - 登录框 → 注入测试（LDAP/SQL/NoSQL）→ 响应差异 = 有效反馈
       - 下载/导出功能 → LFI（../../web.config / .env）
@@ -81,7 +81,7 @@ metadata: { domain: meta, tier: T1 }
 动作:
   - 喷洒成功 → 找可用客户端（🔴 NTLM 全禁域 → 全部 -k Kerberos）
   - WinRM 客户端优先级: winrmexec(pipx 装) > evil-winrm > pywinrm/pypsrp（易卡 SPN）
-  - 拿 shell → 🔴 阻断点1 固定序列（本地状态报告）→ 阻断点6 隧道判断
+  - 拿 shell → 🔴 固定序列（本地状态报告，见 blocking-points-detail 卡）→ 隧道判断（见 blocking-points-detail 卡）
 ```
 
 ## [4] ACL 枚举 — 找提权链
@@ -113,7 +113,7 @@ metadata: { domain: meta, tier: T1 }
 动作:
   - 禁用+密码过期账户 → 先启用(UAC 512) + 设密码（certipy account update）
       ⚠️ 机器有"自动重置机制"（~5分钟）→ 循环脚本：改完立即用
-  - 证书: EnrollmentAgent 模板 → 申请 on-behalf-of 证书（🔴 certipy 5.1 必须 -dcom，RPC 有 bug）
+  - 证书: EnrollmentAgent 模板 → 申请 on-behalf-of 证书（certipy 高版本报错时加 -dcom）
   - adminCount=1 保护 → 找 Scheduled Task "cleanup"（SYSTEM 任务清 adminCount）
       → 先给任务主体组加 OU GenericAll → 触发任务 → 立即改 UAC+密码
 ```
@@ -152,19 +152,19 @@ metadata: { domain: meta, tier: T1 }
 
 ```
 [1] 工具报协议错误（BADOPTION/ETYPE_NOSUPP/STATUS_NOT_SUPPORTED）
-    → 先 run_skill 匹配 + 搜索（HackTricks/NetExec Wiki），禁止改源码试错（阻断点7）
+    → 先 run_skill 匹配 + 搜索（HackTricks/NetExec Wiki），禁止改源码试错（见 blocking-points-detail 卡）
 [2] 无 preauth 账户 ≠ 能拿 session key: getTGT -no-pass 会失败（AS-REP enc-part 用 client key 加密）
 [3] AES key 派生: impacket string_to_key 含 derive('kerberos')，裸 PBKDF2 是错的
 [4] NTLM 全禁域 → 一切 Kerberos（-k）；changepasswd target 必须主机名（cifs SPN）
 [5] 机器重置机制 = 变化信号 → 循环脚本 + 窗口内完成
 [6] 🔴 并行子代理 保上下文: 批量探测/搜索丢 subagent，主上下文只留结论（Hercules 压缩 3-4 次的根因）
 [7] 🔴 卡住三查必含 history: memory + history + KG（PingPong 经验躺在 history 里没被查）
-[8] 🔴 开局 todo_write 建清单，每步 complete_step 签收
+[8] 🔴 开局 todo_write 建清单，每步 todo_write 工具 签收
 ```
 
 ## 🔗 关联
 
 - 启动: `box-startup` | 侦察: `service-attacks` / `web-attacks` | AD: `ad-checklist`
 - 提权: `linux-privesc` / `windows-privesc` | 横向: `lateral-movement`
-- RBCD 无 SPN: `rbcd-spnless` | 卡住: `/debug-5whys`
-- 案例: hercules-progress | 检查表: htb-master-checklist | 架构: htb-agent-v6-architecture
+- RBCD 无 SPN: `rbcd-spnless` | 卡住: `debug-5whys`
+- 检查表: `htb-master-checklist`

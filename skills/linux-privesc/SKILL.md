@@ -14,17 +14,17 @@ metadata: { domain: linux, tier: T1 }
 
 | 场景 | 跳转 |
 |------|------|
-| 刚拿 shell，什么都不知道 | §0 容器检测 (必须先做) → §7 自动化 (linpeas) |
+| 刚拿 shell，什么都不知道 | §0 容器检测 (必须先做) → §2 基础信息 |
 | 内核版本已知 | §1 通杀 CVE: Copy Fail (4.14-7.0) / Dirty Frag (4.x-6.x) / OverlayFS |
 | `sudo -l` 有结果 | §2 Sudo: CVE-2026-53225 / 已知 sudo 二进制绕过 |
 | 有 capabilities | §3 Capabilities 滥用 |
 | 有 SUID 二进制 | §4 SUID: 共享库劫持 / PATH 劫持 / 通配符 |
 | 有 cron/systemd timer | §5 Cron/Systemd Timer 劫持 |
 | 有可写目录/文件 | §6 文件权限: /etc/passwd / authorized_keys / NFS |
-| 有 MySQL/PostgreSQL root | §8 数据库提权 |
+| 有 MySQL/PostgreSQL root | 数据库提权见 mysql-udf-privesc / postgresql-rce 卡 |
 | 是容器环境 | → 加载 `container-escape` |
 | 是 snap/flatpak/firejail | → 加载 `noncontainer-sandbox-escape` |
-| 内核太新无已知 CVE | §7 linpeas → 全量枚举 → §6 文件权限是最稳定的路径 |
+| 内核太新无已知 CVE | linux-exploit-suggester 匹配内核 CVE → §5 文件权限是最稳定的路径 |
 
 ## 0. 容器环境检测（拿 shell 第一毫秒！）
 
@@ -33,7 +33,7 @@ metadata: { domain: linux, tier: T1 }
 [ ] ls -la /.dockerenv 2>/dev/null
 [ ] id | grep -E "docker|lxd|lxc"
 [ ] mount | grep overlay
-→ 命中 → 🔴 你在容器内！加载 container-escape skill
+→ 命中 → 🔴 你在容器内！加载 container-escape 卡
 
 🆕 非容器沙箱 — 同样第一秒就查！
 [ ] snap list 2>/dev/null && echo "⚠️ SNAP → noncontainer-sandbox-escape"
@@ -102,10 +102,10 @@ metadata: { domain: linux, tier: T1 }
 [ ] ps aux; ss -ntlp                              # 内网服务（尤其 127.0.0.1）
 [ ] 🔴 localhost 服务快速检查:
     ss -ltnp | grep 127.0.0.1 → 每个端口都是独立攻击面
-    25151 → Cobbler XMLRPC (CVE-2024-47533)
+    25151 → Cobbler XMLRPC (CVE-2024-47533)（CVE 详见 cve-2024-47533-cobbler-rce 卡）
     54321 → Python eval 注入
     2375 → Docker API
-    9092 → Kafka broker
+    9092 → Kafka broker（详见 kafka-pentesting 卡）
     3000 → 🆕 Gitea 本地实例 → 检查 template-sync / cron 脚本
 [ ] 🔴 ipa 二进制存在 → freeipa-pentesting — 这是 FreeIPA 环境
 [ ] strings /dev/mem -n10 2>/dev/null | grep -i pass

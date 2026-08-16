@@ -1,6 +1,6 @@
 ---
 name: 'credential-spraying-password-reuse'
-description: '凭据喷洒方法论：拿到密码/疑似凭据后横向测试所有服务的强制流程（\U0001F195 疑似凭据先喷后判 + Principal 案例）'
+description: '凭据喷洒方法论：拿到密码/疑似凭据后横向测试所有服务的强制流程（🆕 疑似凭据先喷后判 + Principal 案例）'
 metadata: { domain: creds, tier: T1 }
 ---
 > 📌 DSH 适配：本技能移植自 RS。原 read_skill/run_skill 调用 = 用 DSH 的 skill 工具按名加载对应技能；fleet/kali-mcp = 用 bash 后台任务与 subagent 工具实现。
@@ -100,7 +100,7 @@ curl -s imaps://mail.target -u "$USER:$PASSWORD"
 ### 6. 其他常见服务
 ```bash
 # FTP
-ftp -n target <<< "user $USER $PASSWORD"
+(echo "user $USER"; echo "$PASSWORD"; echo quit) | ftp -n target
 # SMB
 smbclient -U "$USER%$PASSWORD" //target/share
 # WinRM / RDP
@@ -128,7 +128,7 @@ N27xh!!2ucY04 → N27xh!!2ucY04@2026 → N27xh!!2ucY04#Q1
 # 5. 常见模式
 → 同密码但不同用户名: admin, root, <service_name>
 → 去掉特殊字符: N27xh2ucY04
-→ 只取字母数字: N27xh2ucY04
+→ 去特殊字符并截断: N27xh2uc
 ```
 
 ## 密码来源优先级

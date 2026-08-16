@@ -1,13 +1,13 @@
 ---
 name: 'htb-master-checklist'
-description: 'HTB 综合攻击检查表：整合全部28条记忆，按6阶段组织。每步引用对应详细记忆'
+description: 'HTB 综合攻击检查表：整合全部阶段检查要点，按6阶段组织。每步引用对应详细记忆'
 metadata: { domain: meta, tier: T1 }
 ---
 > 📌 DSH 适配：本技能移植自 RS。原 read_skill/run_skill 调用 = 用 DSH 的 skill 工具按名加载对应技能；fleet/kali-mcp = 用 bash 后台任务与 subagent 工具实现。
 
 # HTB 综合攻击检查表
 
-> 整合 28 条记忆、~360 台机器攻击链。每阶段引用对应的详细记忆。
+> 整合全部阶段检查要点、~360 台机器攻击链。每阶段引用对应的详细记忆。
 
 ---
 
@@ -21,19 +21,19 @@ sudo nmap -sU --top-ports 20 -oA nmap/udp <IP>
 
 ### 0.2 OS 判定 → 题型预判
 ```
-[ ] Windows Server 2025 → box-type-recognition 先看 dMSA/KDS
-[ ] Windows Server 2016-2022 → windows-ad-checklist 先看 ADCS/Shadow Credentials
-[ ] Linux 5.10-6.13 → linux-privesc-checklist 先看 Copy Fail/Dirty Frag
-[ ] Linux 其他 → linux-privesc-checklist 9 阶段
+[ ] Windows Server 2025 → ad-type-recognition 先看 dMSA/KDS
+[ ] Windows Server 2016-2022 → ad-checklist 先看 ADCS/Shadow Credentials
+[ ] Linux 5.10-6.13 → linux-privesc 先看 Copy Fail/Dirty Frag
+[ ] Linux 其他 → linux-privesc 9 阶段
 ```
 
 ### 0.3 题型信号速查
 | 信号 | 题型 | 记忆 |
 |------|------|------|
-| KDS Root Key 存在 | BadSuccessor/BetterSuccessor | box-type-recognition |
+| KDS Root Key 存在 | BadSuccessor/BetterSuccessor | ad-type-recognition |
 | NTLM 全失败，Kerberos 成功 | Kerberos-Only AD | kerberos-only-ad |
 | 多域 `nltest /domain_trusts` | 跨林攻击 | kerberos-only-ad |
-| .vmem/.vmdk/.vhd 文件 | VM 取证 | windows-ad-checklist#6 |
+| .vmem/.vmdk/.vhd 文件 | VM 取证 | ad-checklist#6 |
 | MSSQL 端口 1433/1434 | MSSQL 攻击链 | mssql-attack-chain |
 | ADCS HTTP 端点 | ESC1-16 | adcs-attack-chain |
 | Web 登录页面 | CMS RCE / SSTI / SQLi | cms-framework-rce |
@@ -59,15 +59,15 @@ whatweb http://target
 ### 1.2 Web 漏洞速查
 | 漏洞类型 | 速查记忆 | 快速测试 |
 |---------|---------|---------|
-| SQL Injection | mssql-attack-chain / web-payloads-reference | `' OR 1=1--` |
-| NoSQL Injection | web-payloads-reference#5 | `{"$ne": null}` |
-| SSTI | web-payloads-reference#1 | `{{7*7}}` |
-| XSS | web-payloads-reference / XSS 章节 | `<img src=x onerror=alert(1)>` |
-| SSRF | web-payloads-reference / SSRF 章节 | `http://127.0.0.1:PORT` |
-| XXE | web-payloads-reference#2 | `<!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///etc/passwd">]>` |
-| LFI | web-payloads-reference#6 | `../../../../etc/passwd` |
-| Command Injection | web-payloads-reference#7 | `; id` `\|id` `\`id\`` `$(id)` |
-| Deserialization | deserialization-attacks | 检查 ac ed 00 05 / rO0AB / gAS |
+| SQL Injection | mssql-attack-chain / web-attacks | `' OR 1=1--` |
+| NoSQL Injection | web-attacks#5 | `{"$ne": null}` |
+| SSTI | web-attacks#1 | `{{7*7}}` |
+| XSS | web-attacks / XSS 章节 | `<img src=x onerror=alert(1)>` |
+| SSRF | web-attacks / SSRF 章节 | `http://127.0.0.1:PORT` |
+| XXE | web-attacks#2 | `<!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///etc/passwd">]>` |
+| LFI | web-attacks#6 | `../../../../etc/passwd` |
+| Command Injection | web-attacks#7 | `; id` `\|id` `\`id\`` `$(id)` |
+| Deserialization | dotnet-pipe-yaml-deserialization（.NET）与 python-sandbox-escape（Python） | 检查 ac ed 00 05 / rO0AB / gAS |
 | Cypher Injection | web-chained-attacks | `'}) RETURN w UNION MATCH ...` |
 | H2 Java Alias | h2-java-alias-rce | JDBC URL: `INIT=CREATE ALIAS` |
 | Python Sandbox | python-sandbox-escape | `().__class__.__mro__[-1].__subclasses__()` |
@@ -120,9 +120,9 @@ powershell -e <base64_encoded_reverse_shell>
 |--------|--------|------|
 | 🔴 1 | `sudo -l` → GTFOBins 对照 | sudo-escape-techniques |
 | 🔴 2 | Cron jobs → 可写脚本/PATH/通配符 | cron-privesc-patterns |
-| 🔴 3 | SUID 二进制 → GTFOBins | linux-privesc-checklist |
-| 🔴 4 | Docker group → 容器逃逸 | linux-privesc-checklist |
-| 🔴 5 | Capabilities → cap_setuid 等 | linux-privesc-checklist |
+| 🔴 3 | SUID 二进制 → GTFOBins | linux-privesc |
+| 🔴 4 | Docker group → 容器逃逸 | linux-privesc |
+| 🔴 5 | Capabilities → cap_setuid 等 | linux-privesc |
 | 🟠 6 | writable /etc/passwd, /etc/shadow | `ls -la /etc/passwd /etc/shadow` |
 | 🟠 7 | sudo 版本 CVE | `sudo --version` |
 | 🟠 8 | localhost root 服务 → eval/exec 注入 | web-chained-attacks |
@@ -139,7 +139,7 @@ powershell -e <base64_encoded_reverse_shell>
 ## 阶段 4：Windows / AD 提权
 
 ### 4.1 题型判定（🔴 第一步）
-→ 详见 box-type-recognition + windows-ad-checklist#0
+→ 详见 ad-type-recognition + ad-checklist#0
 
 ```bash
 [ ] systeminfo → OS Build (26100 = Server 2025)
@@ -228,25 +228,24 @@ bloodhound-python -d domain -u user -p pass -c All
 
 | 类别 | 记忆 | 内容 |
 |------|------|------|
-| **总览** | box-type-recognition | OS→题型判定树 |
-| | windows-ad-checklist | Windows/AD 全阶段 |
-| | linux-privesc-checklist | Linux 提权 9 阶段 |
-| **Web** | web-payloads-reference | SSTI/XXE/SQLi/LFI 等 payload |
+| **总览** | ad-type-recognition | OS→题型判定树 |
+| | ad-checklist | Windows/AD 全阶段 |
+| | linux-privesc | Linux 提权 9 阶段 |
+| **Web** | web-attacks | SSTI/XXE/SQLi/LFI 等 payload |
 | | cms-framework-rce | 25+ CMS CVE 速查 |
 | | web-chained-attacks | 多阶段链式攻击模式 |
 | | python-sandbox-escape | Python 沙箱逃逸 |
 | **注入** | mssql-attack-chain | MSSQL 全攻击面 |
 | | h2-java-alias-rce | H2 JDBC → Java RCE |
-| | deserialization-attacks | 7 语言反序列化 |
+| | dotnet-pipe-yaml-deserialization（.NET）与 python-sandbox-escape（Python） | 反序列化攻击 |
 | **AD** | adcs-attack-chain | ADCS ESC1-16 |
 | | kerberos-only-ad | No-NTLM/AES256 范式 |
 | | ntlm-relay-chain | NTLM Relay + Coercion |
 | **提权** | sudo-escape-techniques | 40+ sudo 命令逃逸 |
 | | cron-privesc-patterns | 5 种 cron 提权模式 |
-| **技巧** | file-transfer-techniques | 各 OS 文件传输 |
+| **技巧** | living-off-the-land | 各 OS 文件传输 |
 | | tunneling-port-forwarding | 隧道/端口转发 |
-| | deinteractive-credentials | 凭据去交互化 |
+| | credential-spraying-password-reuse | 凭据去交互化 |
 | **实战** | htb-methodology | 打靶强制检查表 |
-| | htb-workflow-with-本地 bash | 本地 bash 工作流 |
-| | reasoning-antipatterns | 推理反模式避坑 |
-| | debug-5whys | 卡住时 5 Whys 框架 |
+| | htb-workflow | 本地 bash 工作流 |
+| | debug-5whys | 卡住时 5 Whys 框架 + 推理反模式避坑 |

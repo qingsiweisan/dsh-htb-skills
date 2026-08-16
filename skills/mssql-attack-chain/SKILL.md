@@ -1,6 +1,6 @@
 ---
 name: 'mssql-attack-chain'
-description: 'MSSQL 攻击全链：xp_cmdshell/UNC injection/linked servers/impersonation/OLE automation + \U0001F195Werkzeug PBKDF2 hash破解/Eighteen IMPERSONATE模式'
+description: 'MSSQL 攻击全链：xp_cmdshell/UNC injection/linked servers/impersonation/OLE automation + 🆕Werkzeug PBKDF2 hash破解/Eighteen IMPERSONATE模式'
 disable-model-invocation: true
 metadata: { domain: db, tier: T2 }
 ---
