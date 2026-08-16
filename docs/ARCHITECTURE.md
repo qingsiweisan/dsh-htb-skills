@@ -8,6 +8,8 @@
 ```
 ┌────────────────────────── 通用机制域(plumbing,不随内容变) ──────────────────────────┐
 │  dsh-htb-router/src/index.js     事件驱动注入引擎(匹配→加载卡正文→agent.inject)      │
+│    └─ 编排器写账本               规则命中 shell 建立信号时由插件直接 append state     │
+│                                  access 事件(去重+每类上限)——模型零参与               │
 │  scripts/audit_routing.py        引用/层级/白名单静态审计                              │
 │  scripts/triage_skills.py        MAPPING→索引生成+结构校验                             │
 │  scripts/verify_run.py           判定层:flag/cred 捕获的确定性复核                     │
@@ -32,6 +34,8 @@
 | 沉淀一台新靶机的知识/新 quirk | 新建/更新 `skills/<name>/SKILL.md` + MAPPING 一行 + triage 生成索引 | router 引擎、审计脚本逻辑 |
 | 让某场景自动注入某卡 | `dsh-htb-router/cordis.patch.yml` 加一条 rule(pattern 用单引号字面量正则) | src/index.js |
 | 新增"可判定捕获"的类型(如 证据文件 artifact 判定) | `capture-verdict` 卡步骤 + `verify_run.py` 加一个检查函数 | state.jsonl 事件型语义不变更时其它不动 |
+| 让某场景自动写账本事件 | `cordis.patch.yml` 该规则加 `state: {type, what}` 字段 | src/index.js(机制已内置) |
+| 让某场景注入硬门提醒(不带卡) | `cordis.patch.yml` 该规则加 `note: |` 字段,cards 留空 | src/index.js |
 | 改 key-state 事件型/schema | `box-startup`「key-state 规范」+ `capture-verdict` 引用的字段 + `verify_run.py` 解析逻辑,三处同步 | router 规则表(除非触发词变了) |
 | 移植整个框架到新领域(如 取证/红队内网) | 换 `skills/` 卡片库 + 重写 `cordis.patch.yml` rules 表;机制域原样复用 | src/index.js、audit、triage、verify_run |
 | 新增静态检查规则(引用/层级/格式) | `audit_routing.py` 加检查函数 + 更新 WHITELIST 必要时 | 卡片正文 |
@@ -61,3 +65,4 @@
 - 判定层语义复核(独立子会话对抗复核)仍是人工操作,未机械化——卡里写了流程,无脚本。
 - 没有变异点级的"加卡→实测"回归流程(他们用 canary ~6min 冒烟;我们缺一个 5 分钟级冒烟靶)。
 - CARD-NORMS 第 2 条(漏洞形状)是内容规范,audit 无法自动检查,靠 review。
+- key-state 持续维护纪律已由 router 编排器写账本补强(B 层),但 Dump 实弹暴露的"模型只写开局、中期不写"问题要等下一轮实弹验证 A+B 组合效果。
