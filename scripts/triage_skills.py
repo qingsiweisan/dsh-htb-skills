@@ -285,6 +285,7 @@ def main():
     lines = ['---',
              'name: %s' % INDEX_NAME,
              'description: HTB 技能库总索引：按领域×层级列出全部技能名，供目录外卡名反查与按需加载。卡壳或需要具体技术时先查本表。',
+             'metadata: { domain: meta, tier: T1 }',
              '---', '',
              '# HTB 技能库索引', '',
              '用法：目录（system prompt）里只列出 T1 卡。T2/T3 卡设置了 disable-model-invocation，',
