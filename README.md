@@ -14,7 +14,7 @@ HTB（Hack The Box）打靶技能库，封装为 DeepSeek Harness 插件。
 
 ```powershell
 # 1. 克隆本仓库
-git clone https://github.com/<owner>/dsh-htb-skills.git
+git clone https://github.com/qingsiweisan/dsh-htb-skills.git
 
 # 2. 安装到 DSH profile（link 安装，本地改代码即时生效）
 dsh plugin --profile web add link:./dsh-htb-skills
