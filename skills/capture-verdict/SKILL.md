@@ -42,5 +42,6 @@ metadata: { domain: meta, tier: T2 }
 
 ## 消费关系
 
-- 复盘/判定层：独立子会话读 `<box>-state.jsonl` + 会话 transcript，逐条重放 evidence 对抗复核（立场：默认捕获未证实，主动找证据推翻）。
+- **确定性复核（机械层）**：`python3 scripts/verify_run.py --state <box>-state.jsonl [--cwd /root/htb]`——读磁盘原始 transcript（session.jsonl.zstd），逐事件检查：证据命令已执行 / 值在输出中 / 独立复核（第二读或 md5 对应）。exit 1 = 捕获未全部证实，复盘时以此为门。
+- 复盘/判定层：确定性层通过后，独立子会话再做语义对抗复核（攻击链是否自洽、是否绕过 writeup、是否撞运气）——立场：默认捕获未证实，主动找证据推翻。
 - 收尾：`<box>-complete.md` 只收录通过判定的 flag 事件。
