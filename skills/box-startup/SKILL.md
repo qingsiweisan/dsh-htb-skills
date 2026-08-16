@@ -138,6 +138,7 @@ metadata: { domain: meta, tier: T1 }
 阶段2: 利用 → 凭据喷洒所有服务 → 动态失败聚类
         └─ 🆕 IMDS/云凭据到手 → 🔴 先加载 aws-attack-surface 再枚举 AWS 服务（卡里有 SQS/CodeBuild 利用链与权限判定）
 阶段2.5: 🔴 阻断点1: SHELL_BOOTSTRAP (拿shell后硬性流程)
+        ├─ 🔴 先写 state.jsonl access 事件（硬门：不写不得提权；router 已自动兜底一条，你补语义）
         ├─ Linux: 6组固定序列 → 产出本地状态报告 → 才允许提权
         └─ Windows: 5组固定序列 → 产出本地状态报告 → 才允许提权
         └─ 🆕 阻断点6: 无条件隧道判断 — ss -tlnp 看本机监听 → 外部端口全封?
