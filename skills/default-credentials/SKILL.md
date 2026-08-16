@@ -4,7 +4,7 @@ description: '默认凭据速查表：数据库/Web框架/远程访问/开发工
 disable-model-invocation: true
 metadata: { domain: creds, tier: T2 }
 ---
-> 📌 DSH 适配：本技能移植自 RS。原 read_skill/run_skill 调用 = 用 DSH 的 skill 工具按名加载对应技能；fleet/kali-mcp = 用 bash 后台任务与 subagent 工具实现。
+> 📌 DSH 用法：用 skill 工具按名加载本卡。
 
 # 默认凭据速查表
 
@@ -64,7 +64,7 @@ metadata: { domain: creds, tier: T2 }
 
 | 服务 | 用户名 | 密码 |
 |------|--------|------|
-| **Jenkins** | `admin` | `password` (首次启动随机，在 `~/.jenkins/secrets/initialAdminPassword`) |
+| **Jenkins** | `admin` | `password` (首次启动随机，在 `~/.jenkins/secrets/initialAdminPassword`；极老版本默认 admin/admin) |
 | **TeamCity** | `admin` | `admin` |
 | **Bamboo** | `admin` | `admin` |
 
@@ -96,7 +96,7 @@ nxc smb TARGET -u users.txt -p pass.txt --no-bruteforce --continue-on-success
 nxc ssh TARGET -u users.txt -p pass.txt --no-bruteforce
 nxc mssql TARGET -u users.txt -p pass.txt --no-bruteforce
 nxc winrm TARGET -u users.txt -p pass.txt --no-bruteforce
-```
+```text
 
 ## 注意事项
 

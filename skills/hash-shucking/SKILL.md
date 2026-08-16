@@ -4,7 +4,7 @@ description: 'Hash Shucking：NT hash作为其他格式候选密码。hashcat NT
 disable-model-invocation: true
 metadata: { domain: creds, tier: T2 }
 ---
-> 📌 DSH 适配：本技能移植自 RS。原 read_skill/run_skill 调用 = 用 DSH 的 skill 工具按名加载对应技能；fleet/kali-mcp = 用 bash 后台任务与 subagent 工具实现。
+> 📌 DSH 用法：用 skill 工具按名加载本卡。
 
 ## Hash Shucking — NT Hash 作为其他格式的候选密码
 
@@ -24,7 +24,7 @@ grep -i ':::' dump.ntds | awk -F: '{print $4}' | sort -u > nt_candidates.txt
 
 # 本机 SAM/SECURITY dump
 nxc smb <ip> -u admin -p pass --local-auth --lsa
-```
+```text
 
 ### Hashcat NT-Candidate 模式
 | 目标格式 | 普通模式 | NT-Candidate 模式 |
@@ -38,10 +38,10 @@ nxc smb <ip> -u admin -p pass --local-auth --lsa
 
 ```bash
 hashcat -m 35300 kerberoast.hash nt_candidates.txt --disable-potfile
-```
+```text
 
 ### 限制
-- 只对 RC4 加密类型有效（Kerberos etype 23）
+- 只对 RC4 加密类型有效（Kerberos 模式 35300/35400，etype 23）
 - AES (etype 17/18) 不适用——Key 不是 NT hash 派生
 - 不能用规则引擎（-r / hybrid），会破坏候选 key
 

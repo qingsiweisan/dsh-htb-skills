@@ -4,7 +4,7 @@ description: 'CMS/Web框架RCE速查：WordPress/Joomla/Drupal/Magento/Django/Fl
 whenToUse: '目标为 CMS 或 Web 框架时按框架名定位 RCE 路径；Krayin CRM (CVE-2026-38526) 见正文。'
 metadata: { domain: web, tier: T1 }
 ---
-> 📌 DSH 适配：本技能移植自 RS。原 read_skill/run_skill 调用 = 用 DSH 的 skill 工具按名加载对应技能；fleet/kali-mcp = 用 bash 后台任务与 subagent 工具实现。
+
 
 # CMS / Web 框架 RCE 速查
 
@@ -79,9 +79,9 @@ metadata: { domain: web, tier: T1 }
 ### 🆕 Krayin CRM (Laravel)
 | CVE / 技术 | 描述 | 机器 |
 |-----------|------|------|
-| CVE-2026-38526 | TinyMCE 上传 → PHP RCE (认证后) | Nexus |
-| CVE-2026-36340 | 邮件附件上传 → RCE (认证后, v2.1.5) | — |
-| CVE-2026-38532 | BOLA 越权密码重置 (认证后) | — |
+| CVE-2026-38526 | TinyMCE 上传 → PHP RCE (认证后, 未独立核实) | Nexus |
+| CVE-2026-36340 | 邮件附件上传 → RCE (认证后, v2.1.5, 已核实) | — |
+| CVE-2026-38532 | BOLA 越权密码重置 (认证后, 未独立核实) | — |
 | Git 历史凭据 | admin/krayin-docker-setup → commit diff → DB_PASSWORD | Nexus |
 
 详见 krayin-crm-attacks
@@ -165,7 +165,7 @@ metadata: { domain: web, tier: T1 }
 [ ] 插件版本: /wp-content/plugins/<name>/readme.txt
 [ ] 备份文件: .bak, .old, .swp, ~, .save
 [ ] 🆕 如果发现 Laravel: 检查 debug mode + /_ignition/ + Laravel Debugbar
-```
+```text
 
 ## 教训
 

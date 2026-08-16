@@ -4,24 +4,24 @@ description: 'DLL劫持实战：32/64位架构匹配、DllMain限制、CreateThr
 disable-model-invocation: true
 metadata: { domain: ad-win, tier: T2 }
 ---
-> 📌 DSH 适配：本技能移植自 RS。原 read_skill/run_skill 调用 = 用 DSH 的 skill 工具按名加载对应技能；fleet/kali-mcp = 用 bash 后台任务与 subagent 工具实现。
+> 📌 DSH 用法：按卡名用 skill 工具加载；长任务用 bash 后台任务、并行侦察用 subagent。
 
 # DLL 劫持实战笔记（来源 Logging 靶机）
 
 ## 架构匹配 🔴 最重要
 - **必须匹配目标进程架构！**
 - 用 `file` 命令确认: `PE32 executable (Intel i386)` = 32位, `PE32+ executable (x86-64)` = 64位
-- 64位 DLL 被 32位进程 LoadLibrary → Error 126 (MOD_NOT_FOUND)
+- 64位 DLL 被 32位进程 LoadLibrary → Error 193 (ERROR_BAD_EXE_FORMAT)；126 (MOD_NOT_FOUND) 是依赖/路径解析失败，两种都说明架构或路径不对
 - MinGW: `i686-w64-mingw32-gcc` = 32位, `x86_64-w64-mingw32-gcc` = 64位
 - msfvenom 默认可能生成 64位 DLL，需明确指定架构
 
 ## DllMain 能做什么
-```
+```text
 ✅ CreateFileA / WriteFile / ReadFile / CopyFileA
 ✅ CreateThread (新线程中执行复杂操作)
 ❌ WinExec / CreateProcessA / system() — 可能死锁或失败
 ❌ ShellExecute — 同上有问题
-```
+```text
 
 ## 绕过 DllMain 限制
 - `CreateThread` + `Sleep(1000)` 让 DllMain 先返回，线程再执行 WinExec

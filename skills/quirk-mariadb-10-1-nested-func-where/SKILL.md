@@ -4,7 +4,7 @@ description: 'MariaDB 10.1.x 嵌套函数在 WHERE 子句失效的 quirk，替�
 disable-model-invocation: true
 metadata: { domain: db, tier: T3 }
 ---
-> 📌 DSH 适配：本技能移植自 RS。原 read_skill/run_skill 调用 = 用 DSH 的 skill 工具按名加载对应技能；fleet/kali-mcp = 用 bash 后台任务与 subagent 工具实现。
+> 📌 DSH 用法：用 skill 工具按名加载本卡。
 
 ## MariaDB 10.1.x — 嵌套函数在 WHERE 子句中失效
 

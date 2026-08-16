@@ -4,7 +4,7 @@ description: 'Web链式攻击抽象：XSS→SSTI(Cobblestone)；HTTP Smuggling�
 whenToUse: '设计多步攻击链时参考既有链式组合与衔接技巧。'
 metadata: { domain: web, tier: T1 }
 ---
-> 📌 DSH 适配：本技能移植自 RS。原 read_skill/run_skill 调用 = 用 DSH 的 skill 工具按名加载对应技能；fleet/kali-mcp = 用 bash 后台任务与 subagent 工具实现。
+
 
 # Web 链式多阶段攻击抽象
 
@@ -12,7 +12,7 @@ metadata: { domain: web, tier: T1 }
 
 ## 模式 A：Second-Order 注入 + 文件读取 + XSS → SSTI（Cobblestone）
 
-```
+```text
 Stage 1: Second-Order SQLi
   入口: vote.cobblestone.htb/suggest.php
   INSERT 用 prepared statement（安全）
@@ -32,28 +32,28 @@ Stage 3: XSS 直接调用 SSTI（不偷 cookie！）
 Stage 4: SSTI → RCE
   Twig: {{_self.env.registerUndefinedFilterCallback("system")}}
         {{_self.env.getFilter("id")}}
-```
+```text
 
 ### 🎯 XSS→SSTI 直接链（关键创新）
-```
+```yaml
 传统思路: XSS → 偷cookie → 自己发SSTI (多一步)
 正确思路: XSS → admin浏览器直接调用SSTI endpoint → 结果外带
           一步到位，不需要cookie离开admin浏览器
-```
+```text
 
 ### 通用检测清单
-```
+```text
 [ ] 每个输入字段是否在后续页面渲染？→ Second-Order 候选
 [ ] 渲染时是否嵌入 SQL / HTML / 模板？
 [ ] MySQL FILE privilege 存在？→ LOAD_FILE 可用
 [ ] 管理面板用 |raw 或 autoescape=false？→ XSS
 [ ] 管理面板是否有内部 API 接受模板表达式？→ SSTI
 [ ] XSS 能否直接调用 SSTI endpoint？→ 跳过cookie盗窃
-```
+```text
 
 ## 模式 B：HTTP Request Smuggling → Session Hijack（Sink）
 
-```
+```text
 Stage 1: Proxy-Backend Desync
   条件：HAProxy fronting Gunicorn/其他后端
   类型：CL.TE（Content-Length vs Transfer-Encoding 不一致）
@@ -66,12 +66,12 @@ Stage 2: Session Cookie Theft
 Stage 3: 云凭据链
   Admin panel → Gitea repo → git history → AWS keys
   AWS IAM → Secrets Manager → KMS decrypt → Root creds
-```
+```text
 （深卡：http-request-smuggling）
 
 ## 模式 C：图数据库注入 + WebAuthn XSS + 消息队列 + LDAP（Sorcery）
 
-```
+```text
 Stage 1: Cypher Injection（Neo4j）
   闭合引号 + UNION MATCH 读取任意节点
   
@@ -85,25 +85,25 @@ Stage 3: Kafka Wire Protocol
 
 Stage 4: FreeIPA (Linux AD)
   HBAC rules + sudo rules + ipa-getkeytab
-```
+```text
 （深卡：cypher-injection / webauthn-xss / kafka-pentesting / freeipa-pentesting）
 
 ## 模式 D：Mirth Connect → Localhost Service → Eval（Interpreter）
 
-```
+```text
 CVE-2023-43208 XStream Deserialization → RCE as mirth
 → mirth.properties 明文 DB 密码 → hash cracking → SSH
 → localhost root Python service eval() 注入 → root
-```
+```text
 （无对应深卡）
 
 ## 模式 E：Git 泄露 + 字体工具链 CVE + setuptools（VariaType）
 
-```
+```text
 .git/ disclosure → git log -p → 删除的 commit 中有密码
 → CVE-2025-66034 fontTools CDATA injection → 写 webshell
 → CVE-2025-47273 setuptools path traversal → root
-```
+```text
 （深卡：xml-attacks-beyond-xxe）
 
 ## 通用教训

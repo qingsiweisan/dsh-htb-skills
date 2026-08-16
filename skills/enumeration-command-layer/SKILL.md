@@ -4,7 +4,7 @@ description: '两阶段枚举框架：外部枚举 (nmap后四轮) + 内部枚�
 whenToUse: '每个内网端口都是新攻击面；注意 Unix socket 感知 + localhost 陷阱警告。'
 metadata: { domain: meta, tier: T1 }
 ---
-> 📌 DSH 适配：本技能移植自 RS。原 read_skill/run_skill 调用 = 用 DSH 的 skill 工具按名加载对应技能；fleet/kali-mcp = 用 bash 后台任务与 subagent 工具实现。
+> 📌 DSH 用法：用 skill 工具按名加载本卡。
 
 # 枚举指挥层 — 完整的枚举行动框架
 
@@ -15,14 +15,14 @@ metadata: { domain: meta, tier: T1 }
 
 ## 铁律
 
-```
+```text
 ① 每一轮只做一件事 — 全部端口先扫第一阶段，再全部扫第二阶段
 ② 每个端口最多 2 分钟 — 不通就跳过，记下，下一轮试变异
 ③ 优先不认证的 — anonymous / null session / 无密码 > 需密码 > 需爆破
 ④ 拿到 shell 立即停 — 不继续枚举外部端口，开始第二阶段的内部枚举
 ⑤ 内部枚举扫完 → 没有攻击面 → 才回到外部继续
 🆕 ⑥ 外部端口 > 3 次探测无响应 → 拿 shell 后立即 ss -tlnp 确认是否 127.0.0.1 绑定（Paperwork 教训: 9100 外部不可达浪费 20 分钟）
-```
+```text
 
 ---
 
@@ -30,7 +30,7 @@ metadata: { domain: meta, tier: T1 }
 
 ## 第一轮：秒杀（≤ 4 分钟）
 
-```
+```text
 [ ] SSL 证书 (所有 SSL 端口): nmap -sC 输出的 ssl-cert
     → Subject CN / SAN → 新子域? → 加 /etc/hosts
     时间限制: 30 秒
@@ -55,11 +55,11 @@ metadata: { domain: meta, tier: T1 }
 
 [ ] SNMP (161): public community → snmpwalk 全量
     时间限制: 1 分钟
-```
+```text
 
 ## 第二轮：无认证数据收集（≤ 5 分钟）
 
-```
+```text
 [ ] DNS (53): dig axfr → 子域全泄露?
 [ ] LDAP (389): 匿名 bind → ldapsearch 全量 → 查 description
 [ ] rpcclient (111): 空会话 → enumdomusers
@@ -69,11 +69,11 @@ metadata: { domain: meta, tier: T1 }
 [ ] Memcached (11211): stats → cachedump
 [ ] rsync (873): 匿名列表 → 下载所有
 [ ] IPMI (623): dumphashes (UDP)
-```
+```text
 
 ## 第三轮：Web 攻击面（≤ 10 分钟）
 
-```
+```text
 [ ] 目录爆破 (每个端口 3 分钟)
 [ ] Vhost 爆破 (5 分钟)
 [ ] JS chunks → grep version → CVE
@@ -81,13 +81,13 @@ metadata: { domain: meta, tier: T1 }
 [ ] robots.txt / sitemap.xml / .git/config / .env
 [ ] 后台登录 → 默认凭据 (最多 5 组)
 [ ] 识别出版本号 → 立即 searchsploit
-```
+```text
 
 ## 第四轮：凭据喷洒（有凭据后）
 
-```
+```text
 SMB / WinRM / SSH / MySQL / MSSQL / RDP / Jenkins / Grafana → 全试
-```
+```text
 
 ## 不知名端口 → unknown-service-probe 三步探测
 
@@ -100,17 +100,17 @@ SMB / WinRM / SSH / MySQL / MSSQL / RDP / Jenkins / Grafana → 全试
 
 ## 铁律
 
-```
+```text
 ① 先看清楚你在哪 → 才决定往哪走
 ② 内网服务 = 外部看不到的攻击面 → 优先于提权
 ③ 每发现一个新用户 / 新服务 / 新连接 → 回到第一行重新摸底
 ④ 完整的内部枚举 ≤ 10 分钟 → 之后才进入提权
 🆕 ⑤ 外部端口探测 > 3 次无响应 ≠ 服务不存在 → 拿 shell 后 ss -tlnp 验证!
-```
+```text
 
 ## I. 定位 — 我在哪？（1 分钟）
 
-```
+```text
 [ ] whoami; id; groups
 [ ] uname -a; cat /etc/os-release; hostname
 [ ] pwd; ls -la /; df -h
@@ -122,11 +122,11 @@ SMB / WinRM / SSH / MySQL / MSSQL / RDP / Jenkins / Grafana → 全试
 [ ] grep NoNewPrivs /proc/self/status
 [ ] mount | grep -E "/snap/|/var/lib/flatpak|/run/host"
 → 命中 → container-escape / noncontainer-sandbox-escape
-```
+```text
 
 ## II. 网络 — 哪些通路是对外不可见的？（2 分钟）
 
-```
+```text
 [ ] ip a; ifconfig; hostname -I                # 我的 IP / 网卡
 [ ] ip route; route -n                          # 路由表 → 其他网段?
 [ ] cat /etc/hosts                               # 内部域名 → 新靶标
@@ -150,11 +150,11 @@ SMB / WinRM / SSH / MySQL / MSSQL / RDP / Jenkins / Grafana → 全试
 [ ] ss -tup | grep ESTAB                        # 当前连接 → 连到哪?
     → 连到 10.x.x.x:1433 → MSSQL 内网横向
     → 连到 DC:389 → 域成员 → AD 攻击面
-```
+```text
 
 ## III. 进程 — 谁在跑？谁跑的命令有参数？（2 分钟）
 
-```
+```text
 [ ] ps aux | head -50                           # 不看全量，先看 root 和当前用户
 [ ] ps aux | grep -vE "\[" | grep -v "ps aux"   # 去掉内核线程
 [ ] cat /proc/1/cmdline | tr '\0' ' '           # init 进程 → systemd? docker-init?
@@ -164,11 +164,11 @@ SMB / WinRM / SSH / MySQL / MSSQL / RDP / Jenkins / Grafana → 全试
    ps aux 输出中的命令行参数 → -p 密码? -u 用户? --token? 第三个参数是 ROOT_DIR?
    定时执行的进程 → *.py / *.sh / 路径含 cron/timer
    root 进程 → 哪个是你的？哪个是别人的？
-```
+```text
 
 ## IV. 文件 — 哪些不是系统自带的？（3 分钟）
 
-```
+```text
 [ ] ls -la /opt/ /srv/ /var/www/ /var/backups/ /tmp/ /dev/shm/
 [ ] 🆕 ls -la /tmp/*.py /tmp/*.sh /opt/*/exploit* 2>/dev/null  # 🔴 先查已有 exploit!
     → 前一轮会话可能留了 exploit 脚本在 /tmp
@@ -186,11 +186,11 @@ SMB / WinRM / SSH / MySQL / MSSQL / RDP / Jenkins / Grafana → 全试
    可写 /etc/passwd → 直接加 root 用户
    可写 web root → webshell
    可写 .so 文件 → ld_preload / library hijacking
-```
+```text
 
 ## V. 用户 & 权限 — 我能变成谁？（2 分钟）
 
-```
+```text
 [ ] who; w; last -a | head -10                   # 谁在线？谁刚登过？
 [ ] cat /etc/passwd | grep -v nologin | grep -v false  # 真实用户
 [ ] cat /etc/shadow 2>/dev/null                   # 🔴 可读 = 直接破解
@@ -202,13 +202,13 @@ SMB / WinRM / SSH / MySQL / MSSQL / RDP / Jenkins / Grafana → 全试
 [ ] crontab -l; cat /etc/crontab; ls -la /etc/cron.*
 [ ] systemctl list-timers --all 2>/dev/null
 [ ] cat /etc/exports                               # NFS 共享
-```
+```text
 
 ---
 
 ## 两个阶段的关系
 
-```
+```text
 阶段1 (外部枚举): nmap 后 → 发现 80, 445, 3000
                   ↓
                  SMB 匿名失败, Grafana LFI 拿到 Postgres 凭据
@@ -222,7 +222,7 @@ SMB / WinRM / SSH / MySQL / MSSQL / RDP / Jenkins / Grafana → 全试
                  "JetDirect 在 localhost → nc 直连" → FSUPLOAD 路径穿越
                   ↓
                  archivist SSH → SCM_RIGHTS → admin 密码 → ROOT FLAG
-```
+```text
 
 **内部枚举发现的每一个新端口/新 socket，都是新攻击面 — 把它当一台新机器重新走一遍外部枚举。**
 

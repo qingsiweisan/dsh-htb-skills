@@ -4,7 +4,6 @@ description: 'evil-winrm/heredoc 路径转义：\b→退格 \r→回车，解决
 disable-model-invocation: true
 metadata: { domain: tools, tier: T3 }
 ---
-> 📌 DSH 适配：本技能移植自 RS。原 read_skill/run_skill 调用 = 用 DSH 的 skill 工具按名加载对应技能；fleet/kali-mcp = 用 bash 后台任务与 subagent 工具实现。
 
 # evil-winrm 路径转义陷阱
 

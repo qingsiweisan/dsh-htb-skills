@@ -4,7 +4,7 @@ description: 'Chrome DevTools Protocol 随机端口发现 + 利用：ss 找端�
 disable-model-invocation: true
 metadata: { domain: web, tier: T3 }
 ---
-> 📌 DSH 适配：本技能移植自 RS。原 read_skill/run_skill 调用 = 用 DSH 的 skill 工具按名加载对应技能；fleet/kali-mcp = 用 bash 后台任务与 subagent 工具实现。
+
 
 ## Chrome DevTools Protocol (CDP) 发现与利用
 
@@ -24,7 +24,7 @@ for port in $(ss -tlnp | grep -oP '127.0.0.1:\K[0-9]+'); do
     echo "CDP found on port $port"
   fi
 done
-```
+```text
 
 ### CDP 端点速查
 
@@ -38,7 +38,7 @@ done
 
 ### WebSocket 连接限制
 
-Chrome 148+ 需要 `--remote-allow-origins=*` 才能通过 WebSocket 连接。无此参数时返回 **403 Forbidden**。
+Chrome 111+ 需要 `--remote-allow-origins=*` 才能通过 WebSocket 连接。无此参数时返回 **403 Forbidden**。
 
 ### 绕过尝试
 

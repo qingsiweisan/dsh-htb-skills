@@ -4,8 +4,6 @@ description: 'HTB Sherlocks 取证调查：题型识别→样本静态分析/CTI
 whenToUse: '做 HTB Sherlocks 取证题时：题型识别→样本静态分析/CTI画像/内存取证/日志分析四流程。'
 metadata: { domain: forensics, tier: T1 }
 ---
-> 📌 DSH 适配：本技能移植自 RS。原 read_skill/run_skill 调用 = 用 DSH 的 skill 工具按名加载对应技能；fleet/kali-mcp = 用 bash 后台任务与 subagent 工具实现。
-
 # HTB Sherlocks 取证调查 playbook
 
 > 用法: 用 skill 工具按名加载 sherlock-investigation
@@ -14,9 +12,9 @@ metadata: { domain: forensics, tier: T1 }
 ## 0. 环境准备（每次必做）
 
 1. **附件获取**: zip 密码通常在题目描述/场景里（如 hacktheblue），**先试密码再爆破**
-2. **大文件（>100MB）直接在 Kali 下载**（Kali 有外网，curl 签名链接即可），别先下 Windows 再传输
-3. 小文件（<50MB）可本地下载后 `scp kali:/tmp/`（SSH 别名 kali = root@192.168.111.128:2222 免密）
-4. Kali 上 Volatility3: `/usr/local/bin/vol`（PATH 里可能没有，用完整路径）
+2. **大文件（>100MB）直接在有外网的分析机下载**（curl 签名链接即可），别先下本机再传输
+3. 小文件（<50MB）可本地下载后 `scp` 到分析机 `/tmp/`（按你环境的 SSH 别名/端口）
+4. 分析机上 Volatility3：用 `which vol` 或完整路径（如 `/usr/local/bin/vol`，PATH 里可能没有）
 5. 解压后 `file` 确认类型 → 路由到对应题型
 
 ## 1. 题型识别（读场景描述第一句就判断）
@@ -31,10 +29,10 @@ metadata: { domain: forensics, tier: T1 }
 
 ## 2. 恶意样本静态分析（四板斧）
 
-```
+```bash
 file + sha256sum → strings -n 4 → readelf -d（NEEDED 库）→ nm（未剥离直接看函数名）
 → objdump -d 反汇编关键函数 → objdump -s -j .rodata 确认字符串精确字节
-```
+```text
 
 🔴 坑：
 - **函数名/输出字符串 ≠ 实际比较的命令字符串**：命令分发真相在反汇编 strncmp/strcmp 引用的 .rodata 地址字节（Phantom Ring: cmd_selfdestruct 函数但命令是 `sdestruct`）
@@ -44,13 +42,13 @@ file + sha256sum → strings -n 4 → readelf -d（NEEDED 库）→ nm（未剥�
 
 ## 3. CTI 威胁画像（四步）
 
-```
+```text
 1. 抓全报告: mcp__tavily__tavily_extract 逐篇抓；截断 → Kali curl + python 去 HTML 标签
    （re.sub(r"<[^>]+>", " ", raw) + html.unescape；TOC 干扰用 rfind 找正文起点）
 2. 提取事实表: 身份/别名/时间线/目标/动机/武器库(版本演进/C2变化/CVE)/基础设施/IOC/受害者
 3. 交叉关联: 同一组织不同厂商命名（Kaspersky "X" = Knownsec 404 "Y"）；武器溯源
 4. 映射 ATT&CK + 逐题对掩码
-```
+```text
 
 🔴 坑：
 - **答案带版本号时掩码会提示**（Asyncshell-v2 教训：全小写+版本号，以报告原文为准）
@@ -60,7 +58,7 @@ file + sha256sum → strings -n 4 → readelf -d（NEEDED 库）→ nm（未剥�
 
 ## 4. Linux 内存取证（10 步 rootkit 检测链）
 
-```
+```text
 1. linux.pslist → 可疑进程
 2. linux.psscan vs pslist 差集 = 隐藏进程
 3. linux.hidden_modules → 隐藏模块（OOT_MODULE, UNSIGNED_MODULE = 核心 IOC）
@@ -71,7 +69,7 @@ file + sha256sum → strings -n 4 → readelf -d（NEEDED 库）→ nm（未剥�
 8. linux.bash → 行为证据（环境变量/信号/命令）
 9. 🔴 linux.kmsg → 权威时间线 + 加载者（Task(N) 字段 = 瞬态 insmod 进程）
 10. 识别开源 rootkit（GitHub 搜索特征）→ 源码验证答案
-```
+```text
 
 🔴 坑：
 - **pslist 时间戳可被 rootkit 伪造**（伪造 start_time），时间线以 kmsg 为准

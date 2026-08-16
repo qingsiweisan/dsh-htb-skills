@@ -4,7 +4,7 @@ description: 'OCR 文字识别→文件写入→代码执行的攻击链技术�
 disable-model-invocation: true
 metadata: { domain: web, tier: T3 }
 ---
-> 📌 DSH 适配：本技能移植自 RS。原 read_skill/run_skill 调用 = 用 DSH 的 skill 工具按名加载对应技能；fleet/kali-mcp = 用 bash 后台任务与 subagent 工具实现。
+
 
 ## OCR → File Write → RCE 攻击链（来源 Makesense 靶机）
 
@@ -20,7 +20,7 @@ metadata: { domain: web, tier: T3 }
 ```bash
 convert -size 2000x120 xc:white -fill black -font DejaVu-Sans-Bold \
   -pointsize 70 -kerning -3 -annotate +10+80 'PAYLOAD_TEXT' output.png
-```
+```text
 - 关键参数：大字体（70pt+）、负 kerning（-3）防止字符间空格、宽画布防止换行
 
 #### 2. 绕过 OCR 字符识别误差

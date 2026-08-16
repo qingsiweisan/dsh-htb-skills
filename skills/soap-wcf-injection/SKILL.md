@@ -4,7 +4,7 @@ description: 'WCF SOAP 注入通用模板：不加认证 + SOAPAction header + b
 disable-model-invocation: true
 metadata: { domain: web, tier: T3 }
 ---
-> 📌 DSH 适配：本技能移植自 RS。原 read_skill/run_skill 调用 = 用 DSH 的 skill 工具按名加载对应技能；fleet/kali-mcp = 用 bash 后台任务与 subagent 工具实现。
+
 
 ## WCF SOAP 注入通用模板
 
@@ -26,7 +26,7 @@ iwr http://TARGET:PORT/Service -Method POST -ContentType 'text/xml' -Body @'
 <param>injection_here</param>
 </SomeMethod></s:Body></s:Envelope>
 '@ -Headers @{SOAPAction='http://tempuri.org/IContract/Method'} -UseBasicParsing
-```
+```text
 
 ### 从 Overwatch 学到的
 

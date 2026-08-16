@@ -20,13 +20,13 @@ https://en.wikipedia.org/wiki/Five_whys
 ## 流程
 
 ### ① 定义失败点（精确到一步）
-```
+```text
 ❌ "提权失败"
 ✅ "SUID 二进制运行后仍返回普通用户 shell"
-```
+```text
 
 ### ② 5 Whys 追问链（示例：SUID 提权失败）
-```
+```text
 Why 1: 为什么 SUID 二进制没给 root？
   → 它 setuid(0) 后立刻又 drop 回原 uid
 
@@ -41,10 +41,10 @@ Why 4: 为什么 PATH 可控却没生效？
 
 Why 5: 为什么没 export？
   → 复制的命令少了 export，子进程用了默认 PATH
-```
+```text
 
 ### ③ Why 5 改造 — 追问到"可操作的根因"
-```
+```text
 标准 5 Whys 可能在 Why 5 停住（"PATH 没 export"）
 HTB 版继续:
 
@@ -53,23 +53,23 @@ Why 6: 有没有其他 SUID 二进制有同样问题？
 
 Why 7: 能不能改脚本读取的配置文件？
   → 配置文件可写 → 注入命令 → setuid 前执行
-```
+```text
 
 ### ④ 假设审计（5 Whys 的补充）
 5 Whys 的已知弱点：无法超越当前知识边界。补一个步骤：
-```
+```text
 列出所有"已被排除的假设"及其排除依据:
 [ ] SUID 二进制本身 → 依据: "没输出" → 🔴 弱！重新验证
 [ ] PATH 已 export → 依据: "我以为改了" → 🟡 需要确认
-```
+```text
 
 ### ⑤ 二分验证
-```
+```text
 取因果链中间一步，实验验证：
 → 先手跑 SUID 二进制，观察 uid 是否变化
 → 变成 root 了？→ 问题在后面的命令注入
 → 没变？→ 问题在 setuid 顺序/脚本逻辑本身
-```
+```text
 
 ## 5 Whys 的批评与应对
 | 5 Whys 弱点 | HTB 版应对 |

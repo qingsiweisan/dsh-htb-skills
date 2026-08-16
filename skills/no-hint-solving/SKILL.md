@@ -12,35 +12,35 @@ metadata: { domain: meta, tier: T1 }
 
 ## 触发条件
 
-```
-在挂有 memory MCP 的机器上（Windows 教练会话）search 返回空或不相关 → 进入本协议；Kali 打靶机无此 MCP，等价物为读进度文件 + htb-skill-index 查卡
+```text
+在挂有 memory MCP 时 search_nodes 返回空或不相关 → 进入本协议；无 memory MCP 时，等价物为读本机笔记 + htb-skill-index 查卡
 类比机器 < 2 台 → 进入本协议
-```
+```text
 
 ## ⛔ 禁止行为
-```
+```text
 ❌ "这个没见过" → 废话，按本协议开始枚举
 ❌ "可能是什么？" → 实验验证，不猜
 ❌ "你见过这个吗？" → 禁止问用户
 ❌ 翻 WP → 禁止
 例外：用户明确授权搜索某卡点的通用技术或 writeup 时，以用户最新指令为准
-```
+```text
 
 ---
 
 ## 阶段 A：攻击面穷举（30 分钟内完成）
 
 ### A1. 端口 → 服务 → 版本（两步）
-```
+```text
 [1] 全端口发现 (PTY 方式): bash 工具 "nmap -p- -sS -T4 -v <IP> -oN /tmp/ports.txt"
     → job_output 工具(idle_ms=300000) 等待完成 → 读取端口列表
 [2] 版本识别: nmap -sV -sC -p PORT1,PORT2,... <IP> (bash 工具，≤30s)
     → 🔴 禁止一步 nmap -sV -sC -p-（违反「发现/版本分开两步」规则，且 -sC -p- 极慢）
 对每个开放端口：curl/banner抓取 → 精确版本号
-```
+```text
 
 ### A2. Web 攻击面（如果有 HTTP）
-```
+```text
 [ ] gobuster/ffuf 目录爆破（common + big wordlists）
 [ ] ffuf vhost 枚举（必须做，不跳过）
 [ ] 每个子域名独立处理：curl -H "Host: X" 
@@ -49,27 +49,27 @@ metadata: { domain: meta, tier: T1 }
 [ ] HTTP 响应头 → Server/X-Powered-By/Cookie 中的框架线索
 [ ] robots.txt / sitemap.xml / .git/config / .env / composer.json
 [ ] 每个输入框/上传点：行为测试（允许什么格式？报什么错？）
-```
+```text
 
 ### A3. 认证攻击面
-```
+```text
 [ ] 注册/登录/密码重置 → 每个都走一遍，观察响应差异
 [ ] 默认凭据表：admin/admin, root/root, guest/guest, 软件名/软件名
 [ ] 弱密码喷洒：用表单自己的错误信息判断用户名是否存在
-```
+```text
 
 ### A4. API 攻击面
-```
+```text
 [ ] 浏览器 DevTools Network 标签 → 抓所有 XHR/fetch 请求
 [ ] /api/ /graphql /rest/ /swagger /docs /openapi
 [ ] 每个 API 端点的参数：少一个会怎样？多一个会怎样？类型错了会怎样？
-```
+```text
 
 ---
 
 ## 阶段 B：版本 → CVE 管道（发现版本号后立即执行）
 
-```
+```text
 对每个精确版本号，按顺序搜：
 [ ] searchsploit <software> <version>
 [ ] GitHub: "CVE <software> <version>"
@@ -79,32 +79,32 @@ metadata: { domain: meta, tier: T1 }
 
 🔴 不过滤！先拿全列表再筛选。CVE 描述不含版本号不代表不能用。
 🔴 每个 CVE 搜 PoC："CVE-XXXX-XXXXX exploit github"
-```
+```text
 
 ---
 
 ## 阶段 C：拿 shell 后的提权发现
 
 ### C1. 第一秒（Linux）
-```
+```bash
 id; uname -a; cat /etc/os-release
 sudo -l; getcap -r /; find / -perm -4000 -type f 2>/dev/null
 env; cat /proc/1/environ | tr '\0' '\n'
 ps aux; ss -ntlp          # 内网服务 = 新攻击面
 cat /etc/crontab; ls -la /etc/cron.*; systemctl list-timers
-```
+```text
 
 ### C2. 第一秒（Windows）
-```
+```bash
 whoami /all; whoami /priv
 systeminfo; net user; net localgroup
 netstat -ano | findstr LISTEN
 dir "C:\Program Files"; dir "C:\Program Files (x86)"
 env  # 或 set
-```
+```text
 
 ### C3. 版本 → 提权 CVE
-```
+```yaml
 Linux: uname -r → searchsploit linux kernel <version>
        sudo -V → searchsploit sudo <version>
        dpkg -l → 每个包的版本 → searchsploit
@@ -113,7 +113,7 @@ Linux: uname -r → searchsploit linux kernel <version>
 Windows: systeminfo → Windows Exploit Suggester
          whoami /priv → 特权令牌提权（SeImpersonate etc）
          已安装程序 → searchsploit each
-```
+```text
 
 ---
 
@@ -121,7 +121,7 @@ Windows: systeminfo → Windows Exploit Suggester
 
 > 🔴 **不要猜。改一个变量，观察输出差异。这是最被低估的技能。**
 
-```
+```text
 D1. 输入变化 → 输出变化
     改一个参数 → 错误信息不同？→ 泄露了内部状态
     加一个字段 → 接受了？→ 未做输入校验
@@ -143,13 +143,13 @@ D4. 数据库注入行为
     输入 {{7*7}} → 输出 49？→ SSTI
     输入 <script> → 原样返回？→ XSS
     输入 ../../etc/passwd → 文件包含
-```
+```text
 
 ---
 
 ## 阶段 E：源码审计（如果有源码泄露）
 
-```
+```text
 E1. git clone / tar xf 所有能拿到的源码
 E2. grep -rE "(exec|system|popen|eval|shell_exec|passthru|Runtime\.exec|ProcessBuilder)" .
 E3. grep -rE "(password|secret|key|token|credential)" .
@@ -157,7 +157,7 @@ E4. grep -rE "(upload|write|save|store)" . | grep -v ".git"
 E5. grep -rE "(admin|root|sudo|su)" . | grep -v ".git"
 E6. 配置文件：每个 config.* settings.* .env application.* → 读全
 E7. 路由文件：每个 endpoint 追到 controller → 找未授权的
-```
+```text
 
 ---
 
@@ -165,7 +165,7 @@ E7. 路由文件：每个 endpoint 追到 controller → 找未授权的
 
 > **当以上 5 阶段全部执行完仍未突破时，才允许输出此报告。**
 
-```
+```text
 穷尽报告：
 - 目标：<IP>
 - 开放端口：<list>
@@ -174,6 +174,6 @@ E7. 路由文件：每个 endpoint 追到 controller → 找未授权的
 - 已测试行为实验：<summary>
 - 当前状态：在 <步骤> 卡住
 - 最可疑的未验证假设：<具体到一行代码或一个参数>
-```
+```text
 
 禁止在穷尽报告之前问用户任何问题。

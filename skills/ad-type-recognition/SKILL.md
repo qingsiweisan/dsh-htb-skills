@@ -11,14 +11,14 @@ metadata: { domain: ad-win, tier: T1 }
 
 ## 决策树
 
-```
+```text
 [ ] OS 版本？
     ├─ Windows Server 2025 (Build 26100+) → dMSA, VBS, Credential Guard
     ├─ Windows Server 2016-2022 → Shadow Credentials, ADCS, RBCD
     └─ 更早 → 传统 AD 攻击
 
 [ ] KDS Root Key 存在？
-    └─ LDAP 搜 CN=Group Key Distribution Service → BadSuccessor 题型！
+    └─ LDAP 搜 CN=Group Key Distribution Service → dMSA 攻击题型（BadSuccessor = 原始攻击名 / BetterSuccessor = 补丁后变体，本卡下文统一用 BetterSuccessor 指代）
 
 [ ] 已控用户权限？
     ├─ CreateChild on OU + GenericWrite on 目标 → 🎯 BetterSuccessor
@@ -34,7 +34,7 @@ metadata: { domain: ad-win, tier: T1 }
 
 [ ] 都无？
     └─ 传统 Kerberoast / ASREP / 爆破
-```
+```text
 
 ## 攻击路径优先级
 

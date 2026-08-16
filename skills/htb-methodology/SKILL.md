@@ -13,7 +13,7 @@ metadata: { domain: meta, tier: T1 }
 
 ## 🔴 阶段零：题型识别（拿 shell 后第一秒）⚠️ Checkpoint 最大教训
 
-```
+```text
 [ ] 这是什么 OS 版本？
     ├─ Windows Server 2025 → 🎯 考虑: dMSA/BadSuccessor, VBS, Credential Guard
     ├─ Windows Server 2016+ → 考虑: Shadow Credentials, ADCS, RBCD
@@ -50,18 +50,18 @@ metadata: { domain: meta, tier: T1 }
     │   └─ 暴露: HTTP endpoint、method、content-type、字段映射、内部服务地址
     ├─ PERSON / PERSON_PASSWORD → 用户 + 密码 hash
     └─ CONFIGURATION → digest.algorithm、SMTP 配置、加密密钥
-```
+```text
 
 ## 阶段一：侦察（25 项 — 按协议分类，每类必须确认）
 
 ### 网络层
-```
+```text
 [ ] nmap -sV -sC -p- --min-rate 1000 -T4 <IP>             # TCP 全端口
 [ ] nmap -sU -sV --top-ports 100 <IP>                      # 🔴 UDP top 100
-```
+```text
 
 ### Web 层
-```
+```text
 [ ] 访问 HTTP/HTTPS + 源码找版本号
 [ ] whatweb <url>; wappalyzer 识别技术栈                   # 🔴 技术栈指纹
 [ ] wafw00f <url>                                          # 🔴 WAF 检测
@@ -78,34 +78,34 @@ metadata: { domain: meta, tier: T1 }
 [ ] 🔴 默认凭证库: cirt.net, default-password.info
 [ ] 🔴 WordPress: wpscan --url <url> --enumerate p,t,u
 [ ] 🆕 JNLP 文件（Java Web Start）: webstart.jnlp → 包含完整 JAR 列表 + 版本号！
-```
+```text
 
 ### SMB / RPC
-```
+```text
 [ ] 🔴 SMB 枚举: smbclient -L //<IP>; smbmap -H <IP>
 [ ] 🔴 SMB 递归列出: smbmap -r <share>; smbclient recurse → 找 .vhd .bak .xml .config .kdbx
 [ ] 🔴 rpcclient -N -U "" <IP> → enumdomusers, lsaenumsid, querydispinfo
-```
+```text
 
 ### LDAP / AD
-```
+```text
 [ ] 🔴 LDAP 匿名绑定: ldapsearch -x -H ldap://<IP> -b "dc=domain,dc=com"
 [ ] 🔴 所有 description / info / notes 字段 → 密码宝库！（Baby 教训）
-```
+```text
 
 ### 其他协议
-```
+```text
 [ ] 🔴 SNMP: snmpwalk -v2c -c public <IP>
 [ ] 🔴 DNS 区域传送: dig axfr @<IP> <domain>
 [ ] 🔴 NFS: showmount -e <IP>
 [ ] 🔴 SMTP: VRFY / EXPN / RCPT TO 用户枚举
 [ ] 🔴 FTP: anonymous 匿名登录
 [ ] 🔴 WinRM: 端口 5985/5986 → evil-winrm 可用性
-```
+```text
 
 ## 阶段二：初始立足
 
-```
+```text
 [ ] 找到应用版本 → searchsploit + GitHub Advisories + NVD（完整列出，不过滤）
 [ ] 版本确认后第一秒搜 PoC，不许自己写！
 [ ] 🔴 Web: SQLi / SSTI / XXE / LFI / File Upload / Command Injection → 每个参数试
@@ -114,12 +114,12 @@ metadata: { domain: meta, tier: T1 }
 [ ] 🔴 密码来源：env 变量、配置文件、config 注释、默认密码、常见弱密码
 [ ] 🔴 SMB 发现 .vhd / .vhdx → 挂载 → SAM/SYSTEM 提取 → secretsdump
 [ ] 一旦拿到 shell → 立即执行阶段零 + 阶段三检查表 + 读对应 OS 详细 checklist
-```
+```text
 
 ## 阶段三：横向移动（拿到 shell 立即执行）
 
 ### 全线（Linux + Windows 通用）
-```
+```text
 [ ] 🔴 env && cat /proc/1/environ | tr '\0' '\n'          # 环境变量是第一站！
 [ ] 🔴 所有 env PASSWORD/SECRET/KEY/TOKEN → 立即试 SSH
 [ ] 找 config：.env, web.config, app.ini, database.*, *.conf
@@ -131,42 +131,42 @@ metadata: { domain: meta, tier: T1 }
 [ ] 🔴 凭据收集完 → 去交互化（SSH key 去密码、写 authorized_keys）
 [ ] 🆕 🔴 数据库连接 → SHOW TABLES → 重点查 CHANNEL/CONFIGURATION/PERSON_PASSWORD
 [ ] 🆕 🔴 内网服务 → Python socket 直连 fuzz → 加载 unknown-service-probe 技能
-```
+```text
 
 ### Linux 专项
-```
+```text
 [ ] id; uname -a; cat /etc/os-release; cat /etc/passwd
 [ ] getcap -r / 2>/dev/null; find / -perm -4000 -type f 2>/dev/null
 [ ] sudo -l; crontab -l; cat /etc/crontab; systemctl list-timers --all
 [ ] find / -writable -type f 2>/dev/null | grep -v proc
 [ ] 容器内？→ 立即 docker/LXC 相关检查 → container-escape 技能
 [ ] 引用: linux-privesc 技能（完整版）
-```
+```text
 
 ### Windows 专项
-```
+```text
 [ ] whoami /all; whoami /priv; net user; net localgroup
 [ ] systeminfo | findstr /B /C:"OS" /C:"Hotfix"  # 内核版本 + 补丁
 [ ] 🔴 PowerShell history: type %APPDATA%\Microsoft\Windows\PowerShell\PSReadLine\ConsoleHost_history.txt
 [ ] 🔴 reg save HKLM\SAM / HKLM\SYSTEM（如果权限够）
 [ ] 杀软/EDR: wmic /namespace:\\root\securitycenter2 path antivirusproduct
 [ ] 引用: ad-checklist 技能（完整版）+ windows-privesc 技能
-```
+```text
 
 ## 阶段四：提权
 
 ### Linux
-```
+```text
 [ ] sudo -l → sudoedit? → CVE-2023-22809
 [ ] getcap → cap_sys_admin/cap_sys_ptrace → 利用
 [ ] SUID → GTFOBins; 内核 → searchsploit
 [ ] 🔴 Wildcard 注入 / 共享库劫持 / 可写 passwd&sudoers / TMUX
 [ ] 🔴 已安装软件包 → dpkg -l / rpm -qa → 逐版本 searchsploit
 [ ] 引用: linux-privesc 技能（完整版）
-```
+```text
 
 ### Windows 软件枚举（🔴 第一优先级！）
-```
+```text
 [ ] 🔴 64-bit: reg query HKLM\Software\Microsoft\Windows\CurrentVersion\Uninstall /s
 [ ] 🔴 32-bit: reg query HKLM\Software\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall /s
 [ ] 🔴 dir "C:\Program Files"; dir "C:\Program Files (x86)" → 每个文件夹名 = 攻击面
@@ -180,36 +180,36 @@ metadata: { domain: meta, tier: T1 }
 [ ] 🔴 浏览器密码: LaZagne.exe browsers
 [ ] 🔴 全局 AppData: dir /s /b %APPDATA%\*confCons* *.rdp *.rdg *.sdtid
 [ ] 🔴 加密密码 → 搜 GitHub decryptor（别手写！）
-```
+```text
 
 ### Windows 快速提权
-```
+```text
 [ ] whoami /priv → SeImpersonate → Potato; SeBackup → SAM dump; SeDebug → 进程注入
 [ ] AlwaysInstallElevated: reg query HKCU + HKLM \Policies\Microsoft\Windows\Installer
 [ ] Unquoted service path: wmic service get name,pathname | findstr /v C:\Windows
 [ ] systeminfo → 补丁 N/A? → searchsploit kernel
 [ ] 引用: windows-privesc 技能（完整版）
-```
+```text
 
 ## Docker 容器专项
 
-```
+```text
 [ ] env + /proc/1/environ + /proc/1/mountinfo
 [ ] uname -r → kernel CVE; Docker Desktop 版本 → CVE（如 CVE-2025-9074）
 [ ] 检查 192.168.65.7:2375（Docker Desktop API）
 [ ] docker/lxc/lxd 组 → 容器逃逸 → container-escape 技能
 [ ] 挂载点 .. 遍历
-```
+```text
 
 ## 反弹 Shell 纪律（DSH 本机 bash）
 
-```
+```text
 [ ] 🔴 推荐 socat 给 PTY（有提示符，配合 sleep 等待输出）:
     socat file:$(tty),raw,echo=0 tcp-listen:4444
 [ ] nc 备选（无 PTY 无提示符）: nc -lvp 4444
 [ ] 快命令等 300-500ms 再读，慢命令（find/ps/nmap）等 1-3 秒
 [ ] 长任务用 bash 工具 run_in_background + job_output 收结果
-```
+```text
 
 **🔴 核心原则：**
 1. **socat 给 PTY** — 有提示符，不要 nc

