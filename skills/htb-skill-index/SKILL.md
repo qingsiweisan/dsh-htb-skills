@@ -14,7 +14,7 @@ metadata: { domain: meta, tier: T1 }
 ## 元方法论 / 总路由
 
 - **T1（14）**：attack-surface-meta、box-startup、chain-primitives、debug-5whys、derive-command、enumeration-command-layer、hacktricks-url-index、htb-master-checklist、htb-methodology、htb-workflow、no-hint-solving、parallel-recon、quickref-cards、tool-scenario-reference
-- **T2（1）**：blocking-points-detail
+- **T2（2）**：blocking-points-detail、capture-verdict
 
 ## Web 应用
 

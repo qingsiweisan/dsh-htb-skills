@@ -58,6 +58,7 @@ MAPPING = {
     # generate_index_text() 会把它从表格里排除，避免自引用。
     'htb-skill-index': ('meta', 'T1'),
     'blocking-points-detail': ('meta', 'T2'),
+    'capture-verdict': ('meta', 'T2'),
     # web
     'cms-framework-rce': ('web', 'T1'),
     'ssrf-protocol-matrix': ('web', 'T1'),

@@ -196,7 +196,7 @@ metadata: { domain: meta, tier: T1 }
 
 - 阶段5 收尾：`<box>-complete.md` 由 state.jsonl **汇总生成**（攻击链 = 按 ts 排序的 access/flag 事件；quirk = note 事件）。
 - 阶段0 续跑：读 state.jsonl 判断进度（access 事件数 = 已立足主机数；flag 事件 = 已捕获目标）。
-- 判定层/复盘：直接消费 state.jsonl，不读聊天记录。
+- 判定层/复盘：直接消费 state.jsonl，不读聊天记录；flag/cred 捕获判定流程见 capture-verdict 卡（router 在 flag 读取命令出现时自动注入）。
 
 ---
 
