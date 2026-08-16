@@ -1,0 +1,40 @@
+{
+  "name": "dsh-htb-skills",
+  "description": "HTB (Hack The Box) pentesting skill library plugin for DeepSeek Harness: 112 distilled technique cards (T1 routing / T2 deep-dive / T3 reference tiers, disable-model-invocation for hidden tiers) plus a generated htb-skill-index. Mounts a package-local skill provider via the dsh-skill-filesystem provider, so skills stay versioned with the package and hot-reload on edit. No browser half, no tools, no routes.",
+  "version": "0.1.0",
+  "type": "module",
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./package.json": "./package.json",
+    "./skills/*": "./skills/*"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "dependencies": {
+    "@deepseek-ai/dsh-skill-filesystem": "^0.1.0-rc.6"
+  },
+  "files": [
+    "src/**/*.js",
+    "skills/**/SKILL.md",
+    "scripts",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "deepseek-harness",
+    "dsh-plugin",
+    "hackthebox",
+    "htb",
+    "pentest",
+    "skills"
+  ],
+  "license": "MIT"
+}

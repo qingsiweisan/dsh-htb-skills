@@ -1,0 +1,15 @@
+# dsh-htb-skills bundle patch: inserts the host plugin row into the profile
+# roster. Applied as a profile bundle layer (the `dsh.bundle.patch` manifest
+# field). Activate with:
+#
+#   dsh plugin --profile <name> add link:/path/to/dsh-htb-skills
+#
+# or, once published to npm:
+#
+#   dsh plugin --profile <name> add dsh-htb-skills
+#
+# The row is a bare host plugin by package name: it registers a `htb` skill
+# provider over the package's own `skills/` tree. No browser half.
+- insert:
+    - id: htb-skills
+      name: 'dsh-htb-skills'
