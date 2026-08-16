@@ -7,6 +7,7 @@ metadata: { domain: meta, tier: T1 }
 
 # HTB 标准化打靶流程（强制检查表）
 
+> 📌 **按领域速查见 htb-master-checklist 卡**
 > 🔴 **本 checklist 是快速索引。拿到 shell 后 → 立即加载 linux-privesc 技能（Linux）或 ad-checklist 技能（Windows/AD）**
 > 🆕 **内网服务 → 加载 unknown-service-probe 技能**
 
@@ -219,7 +220,7 @@ metadata: { domain: meta, tier: T1 }
 6. 🆕 **内网服务用 Python socket 直连** — 不通过 nc/curl 中转，完整读 body
 7. 🆕 **搜索摘要 ≠ 完整信息** — 版本变更/算法参数类搜索必须点原文读全文
 
-## 核心教训
+## 案例教训
 
 ### Checkpoint 🔴: 题型识别缺失 → 2小时浪费在爆破上 / Server 2025 = dMSA / KDS + CreateChild + GenericWrite = BetterSuccessor / VMkatz 处理 vmem
 ### Interpreter 🆕: 搜索摘要漏关键参数（600000 iters）→ hash 破解失败 / 黑盒 fuzz 绕过源码审计直接定位 eval() / DB CHANNEL 表 = 攻击链地图 / JNLP 文件暴露完整技术栈

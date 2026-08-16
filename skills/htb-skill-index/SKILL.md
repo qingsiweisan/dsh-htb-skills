@@ -1,6 +1,6 @@
 ---
-name: 'htb-skill-index'
-description: 'HTB 技能库总索引：按领域×层级列出全部技能名，供目录外卡名反查与按需加载。卡壳或需要具体技术时先查本表。'
+name: htb-skill-index
+description: HTB 技能库总索引：按领域×层级列出全部技能名，供目录外卡名反查与按需加载。卡壳或需要具体技术时先查本表。
 metadata: { domain: meta, tier: T1 }
 ---
 

