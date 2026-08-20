@@ -20,7 +20,6 @@
 
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { FileSystemSkillProvider } from '@deepseek-ai/dsh-skill-filesystem'
 import { registerSherlockTools } from './sherlock-tools.js'
 
 /** Stable Cordis plugin name. */
@@ -44,11 +43,16 @@ export function bundledSkillsRoot() {
  *     only the tools mount and the card names never collide.
  *   - `tokenPath` / `token`: HTB bearer token source (default
  *     ~/.dsh/htb-token.txt or $HTB_TOKEN).
+ *
+ * The skills provider is imported lazily: tools-only mounts (skillsEnabled:
+ * false) resolve no external packages, so a link/junction into a deployment
+ * whose node_modules lacks @deepseek-ai/dsh-skill-filesystem still loads.
  * @param ctx - host plugin context carrying `skills` and `tools`.
  */
-export function apply(ctx, config) {
+export async function apply(ctx, config) {
   config = config ?? {}
   if (config.skillsEnabled !== false) {
+    const { FileSystemSkillProvider } = await import('@deepseek-ai/dsh-skill-filesystem')
     const root = bundledSkillsRoot()
     ctx.skills.registerProvider((control) =>
       new FileSystemSkillProvider(ctx, control, {
