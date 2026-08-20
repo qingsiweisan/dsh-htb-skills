@@ -11,7 +11,25 @@ metadata: { domain: forensics, tier: T1 }
 
 ## 0. 环境准备（每次必做）
 
-1. **附件获取**: zip 密码通常在题目描述/场景里（如 hacktheblue），**先试密码再爆破**
+> 🤖 **下载/取题/交答案走自动化脚本 `scripts/sherlock.mjs`**（Node 18+，零依赖，Windows/Kali 都能跑）。别再手动抓 Playwright 或猜 API。
+
+```bash
+# 1. 一次性拿 token 落盘（3 天有效；过期重登后重跑这一步）：
+#    页面上下文 fetch: localStorage.getItem('htb-token') → data: URL 下载成 htb-token.txt → 移到 ~/.dsh/htb-token.txt
+# 2. 拉题目（场景+任务+hint+mask 全在这）：
+node scripts/sherlock.mjs info <slug>          # 例: info Baggage
+node scripts/sherlock.mjs tasks <slug>         # 只列任务 id/hint/mask
+# 3. 下附件（zip 密码默认 hacktheblue，--password 覆盖）：
+node scripts/sherlock.mjs download <slug> -o ./work
+# 4. 交答案（task 可用任务 id 或 1-based 序号；submit-file 批量交 JSON）：
+node scripts/sherlock.mjs submit <slug> 2 "Everything 1.4.1.1028"
+node scripts/sherlock.mjs submit-file <slug> answers.json   # {"1":"...","2":"..."}
+node scripts/sherlock.mjs progress <slug>      # owned / 进度 / rank
+```
+
+手动备选（脚本不可用时）：
+
+1. **附件获取**: zip 密码通常是 HTB 默认 `hacktheblue`（题目描述/场景里也可能给），**先试密码再爆破**
 2. **大文件（>100MB）直接在有外网的分析机下载**（curl 签名链接即可），别先下本机再传输
 3. 小文件（<50MB）可本地下载后 `scp` 到分析机 `/tmp/`（按你环境的 SSH 别名/端口）
 4. 分析机上 Volatility3：用 `which vol` 或完整路径（如 `/usr/local/bin/vol`，PATH 里可能没有）
@@ -26,6 +44,7 @@ metadata: { domain: forensics, tier: T1 }
 | "memory dump" / "rootkit" / "memory forensics" / 给 .mem/.raw + profile | 内存取证 | §4 |
 | 日志文件（IIS/EDR/Sysmon/PCAP） | 日志分析 | §5 |
 | 磁盘镜像（E01/raw） | 磁盘取证 | §6 |
+| NTUSER.DAT / UsrClass.dat 注册表 hive，"文件夹何时被访问/访问过什么" | Shellbag 取证 | §7 |
 
 ## 2. 恶意样本静态分析（四板斧）
 
@@ -85,7 +104,27 @@ file + sha256sum → strings -n 4 → readelf -d（NEEDED 库）→ nm（未剥�
 - PCAP: `tshark -Y "http.request || dns" -T fields` 先看协议分布，再跟流
 - 思路: 场景描述给"结果"（如数据泄露），倒推"入口"（初始 payload）
 
-## 6. 通用规则
+## 7. Windows Shellbag 取证（文件夹访问证据）
+
+> 题型：给 NTUSER.DAT + UsrClass.dat 注册表 hive（常见 KAPE 采集），问"哪个文件夹/网络共享/归档被访问、何时访问、staging/exfil 路径"。
+
+**工具（首选 SBECmd，别手写 python-registry 解析）**：
+- 下载 https://download.ericzimmermanstools.com/net9/SBECmd.zip（Eric Zimmerman，.NET 9）
+- Windows 上 `dotnet --list-runtimes` 有 9.x 即可直接跑：`SBECmd.exe -d <hive目录> --csv <输出目录>`
+- CSV 关键列：`AbsolutePath` / `ShellType` / `Value` / `LastWriteTime` / `FirstInteracted` / `LastInteracted`
+
+🔴 坑：
+- **hive 脏要 LOG 事务日志**：活取证拷贝的 hive 报 "Registry hive is dirty... Aborting" → 把同名的 LOG1/LOG2 一起拷到同目录（Windows 大小写不敏感，`ntuser.dat.LOG1` 能匹配 `NTUSER.DAT`）
+- **"Last Interacted" ≠ BagMRU 节点 LastWrite**：题目 hint 说 "Last Interacted Timestamp" 时，答案 = CSV 的 `LastInteracted` 列（该目录的 Shellbag 条目键最后被交互的时间），不是节点 LastWriteTime。同一目录在两个用户 hive 里都有条目 → 取 `LastInteracted` 非空的那个
+- **时间戳是 UTC**：SBECmd 输出 UTC，直接填答案，不要换时区（换时区会错）
+- **Win11 结构**：子文件夹名作为二进制 value 存在父键上（value "0"/"1"/"2"… = 各子文件夹名，同名 subkey = 各子条目）。手写 python-registry 会漏读/误读名字（"a" 被读成 "a4"、"OT Station 3 internal VPN" 被读成 PIDL 乱码）→ 直接上 SBECmd
+- **zip 内容**：归档被浏览时 zip 变 folder，内容条目 ShellType="Zip file contents"，AbsolutePath 形如 `...\a.zip\a\Engineers Tab/a/`（末尾斜杠=父目录）；值里会夹带格式化日期字符串
+- **UNC 网络共享**：`Desktop\Computers and Devices\Prod-ns-2\Prod-ns-2\prodshare` = `\\Prod-ns-2\prodshare`（ShellType=Network location）
+- **已知文件夹**：BagMRU 值里的 GUID 是已知文件夹 CLSID（如 `088E3905-0323-4B02-9826-5D99428E115F` = Downloads）
+
+**实战链（Baggage，Very Easy）**：受害者 Steve(OT 工程师) → 钓鱼下 1.zip → 攻击者带进 Everything 1.4.1.1028 搜敏感数据 → 浏览 Documents\{OT Station 3 internal VPN, OnePassword MasterPass, Engineers Tab} + 网络共享 Construction 2027\Dam Construction Engineer Plans.zip → staging 到 C:\Users\steve\Pictures\a → 压缩成 a.zip 外泄。答案全在 shellbag 的 LastInteracted 时间戳 + AbsolutePath 里。
+
+## 8. 通用规则
 
 - **答案以原始材料为准**（报告原文/反汇编字节/kmsg），掩码长度是提示不是装饰
 - 做题过程随时把发现写入 ANALYSIS.md，逐题对照，避免答串
