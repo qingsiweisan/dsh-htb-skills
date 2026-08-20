@@ -9,7 +9,15 @@
 #   dsh plugin --profile <name> add dsh-htb-skills
 #
 # The row is a bare host plugin by package name: it registers a `htb` skill
-# provider over the package's own `skills/` tree. No browser half.
+# provider over the package's own `skills/` tree AND the htb_sherlock_* model
+# tools (HTB labs API). No browser half.
+#
+# Deployments that already serve the same cards from another provider (e.g.
+# ~/.dsh/skills on a dev host) can mount tools-only with:
+#   - id: htb-skills
+#     name: 'dsh-htb-skills'
+#     config:
+#       skillsEnabled: false
 - insert:
     - id: htb-skills
       name: 'dsh-htb-skills'

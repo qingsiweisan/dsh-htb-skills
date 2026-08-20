@@ -1,6 +1,6 @@
 {
   "name": "dsh-htb-skills",
-  "description": "HTB (Hack The Box) pentesting skill library plugin for DeepSeek Harness: 112 distilled technique cards (T1 routing / T2 deep-dive / T3 reference tiers, disable-model-invocation for hidden tiers) plus a generated htb-skill-index. Mounts a package-local skill provider via the dsh-skill-filesystem provider, so skills stay versioned with the package and hot-reload on edit. No browser half, no tools, no routes.",
+  "description": "HTB (Hack The Box) pentesting skill library plugin for DeepSeek Harness: 112 distilled technique cards (T1 routing / T2 deep-dive / T3 reference tiers, disable-model-invocation for hidden tiers) plus a generated htb-skill-index. Mounts a package-local skill provider via the dsh-skill-filesystem provider, so skills stay versioned with the package and hot-reload on edit. Also registers htb_sherlock_* model tools (info/tasks/download/submit/submit-file/progress) for the HTB labs API. No browser half, no routes.",
   "version": "0.1.0",
   "type": "module",
   "engines": {
