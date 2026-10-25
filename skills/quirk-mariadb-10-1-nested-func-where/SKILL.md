@@ -1,10 +1,9 @@
 ---
 name: 'quirk-mariadb-10-1-nested-func-where'
-description: 'MariaDB 10.1.x 嵌套函数在 WHERE 子句失效的 quirk，替代方案为 HEX(LEFT()) 精确匹配'
-disable-model-invocation: true
+description: 'MariaDB 10.1.x 嵌套函数在 WHERE 子句失效的 quirk，替代方案为 HEX(LEFT()) 精确匹配（检索词：quirk mariadb 10 1 nested func where）'
 metadata: { domain: db, tier: T3 }
 ---
-> 📌 DSH 用法：用 skill 工具按名加载本卡。
+> 📌 DSH 适配：本技能移植自 RS。原 read_skill/run_skill 调用 = 用 DSH 的 skill 工具按名加载对应技能；fleet/kali-mcp = 用 bash 后台任务与 subagent 工具实现。
 
 ## MariaDB 10.1.x — 嵌套函数在 WHERE 子句中失效
 
@@ -17,7 +16,7 @@ metadata: { domain: db, tier: T3 }
 - `CONV(HEX(...),16,10)` → 不可用 (CONV 函数本身可能被禁)
 - 替代方案 A: HEX(LEFT(col,N)) 精确匹配逐字符穷举 (这次用的)
 - 替代方案 B: 如果有报错注入，用 extractvalue 一次性拿数据
-- 替代方案 C: 如果 >=/<= 可用，直接二分 (但 MariaDB 10.1 上字符串 >=/<= 也不可用)
+- ~~替代方案 C: 如果 >=/<= 可用，直接二分~~ → **不可用（勿列入可选路线）**：前提被自己否掉 —— MariaDB 10.1 上字符串 >=/<= 同样不工作
 
 **Affected:** MariaDB 10.1.x, 可能含 10.0/10.2
 **Verified:** 2026-07-14, Writeup HTB (10.129.33.6)

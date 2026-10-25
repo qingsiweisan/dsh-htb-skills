@@ -1,10 +1,9 @@
 ---
 name: 'unknown-service-probe'
-description: '未知服务探测 SOP：端口不在 service-attacks 查表中 → 三步探测法 (Banner→协议指纹→CVE)。含二进制协议指纹 magic bytes 和 5 分钟规则。'
-whenToUse: '端口开放但不在 service-attacks 查表中时'
+description: '未知服务探测 SOP：端口不在 service-attacks 查表中 → 三步探测法 (Banner→协议指纹→CVE)。含 favicon 指纹、HTTP 方法变换、二进制协议 magic bytes 和 5 分钟规则。（检索词：favicon/fingerprint/unknown-port/HTTP-method/banner/unknown port/HTTP method/unknown service/probe）'
 metadata: { domain: network, tier: T1 }
 ---
-> 📌 DSH 用法：用 skill 工具按名加载本卡。
+> 📌 DSH 适配：本技能移植自 RS。原 read_skill/run_skill 调用 = 用 DSH 的 skill 工具按名加载对应技能；fleet/kali-mcp = 用 bash 后台任务与 subagent 工具实现。
 
 # 未知服务探测 SOP
 
@@ -13,12 +12,12 @@ metadata: { domain: network, tier: T1 }
 
 ## 为什么需要这个 — service-attacks 有上限
 
-```text
-service-attacks 覆盖: 50+ 端口（以 service-attacks 实际表为准） ✅
+```
+service-attacks 覆盖: 41 个端口 ✅
 HTB 可能出现的端口: 无限
 你第一次见 :4840 → "OPC UA...这是什么？"
 第一次见 :50051 → "gRPC...怎么连？"
-```text
+```
 
 ## 三步探测法（5 分钟完成）
 
@@ -41,7 +40,7 @@ nmap --script ssl-enum-ciphers -p <PORT> <IP>
 # "220" → SMTP 在非标端口
 # "+OK" → POP3
 # "* OK" → IMAP
-```text
+```
 
 ### 步骤 2：协议指纹（2 分钟）
 
@@ -61,12 +60,12 @@ printf '\x00\x00\x00\x90\xffSMBr\x00\x00\x00\x00...' | nc -w 2 <IP> <PORT> | xxd
 # 试 gRPC/HTTP2
 printf "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n" | nc -w 2 <IP> <PORT>
 # 试 MySQL
-nc -w 2 <IP> <PORT> | xxd                    # 裸连先收到服务端 greeting，直接读 banner 即可；4 字节魔数非握手包
+printf '\x00\x00\x00\x00\x0a' | nc -w 2 <IP> <PORT> | xxd   # 返回版本
 # 试 Redis
 printf "PING\r\n" | nc -w 2 <IP> <PORT>                    # 返回 +PONG
 # 试 memcached
 printf "stats\r\n" | nc -w 2 <IP> <PORT>
-```text
+```
 
 ### 步骤 3：搜版本 → CVE（2 分钟）
 
@@ -79,15 +78,54 @@ searchsploit <software> <version>
 # GitHub Advisory: https://github.com/advisories → 搜 <software> <version>
 # NVD: https://nvd.nist.gov/vuln/search → 搜软件名
 # Google: "<software> <version> exploit github"
-```text
+```
+
+## 🔴 Web 型目标的两个高价值原语（最常被漏掉）
+
+### 原语 A：favicon 是**独立于 banner** 的指纹源
+
+nmap 的 banner 经常只给框架名（例如 `Node.js Express framework`），**不说具体是什么应用**。
+favicon 是另一个独立指纹，能直接定位到**产品**。
+
+```bash
+# ① 取 favicon
+curl -s http://<IP>:<PORT>/favicon.ico -o fav.ico
+
+# ② mmh3 hash → 比对已知指纹库（首选，可自动化）
+python3 -c "import mmh3,codecs;print(mmh3.hash(codecs.encode(open('fav.ico','rb').read(),'base64')))"
+
+# ③ 有网时：反向图搜（Google 图片 / Bing 视觉搜索）→ 直接出产品名
+# ④ 无网时：strings fav.ico / 描述图标形状，再搜 "<形状> favicon <端口>"
+```
+
+**为什么值钱**：banner 给"什么框架"，favicon 给"什么产品"。产品名一出来，就能直接查该产品的
+默认配置 / 未授权面 / 编辑器路径 —— 而不是对着框架名干瞪眼。
+
+工具/库：`FavFreak`、`fav-up`、Shodan 的 `http.favicon.hash:` 语法。
+
+### 原语 B：GET 失败 ≠ 不可访问 —— 换方法 / 换形态再试
+
+SPA + JSON API 型目标，直接 GET 常返回错误页或 404，**但换个方法或路径就出来了**。
+
+```bash
+# 依次试，别在 GET 失败时就判定"没东西"
+curl -X POST http://<IP>:<PORT>/                       # 方法变换（最高频命中）
+curl -X POST -H 'Content-Type: application/json' -d '{}' http://<IP>:<PORT>/
+curl -X OPTIONS -i http://<IP>:<PORT>/                 # 看 Allow 头 → 告诉你该用哪个方法
+curl http://<IP>:<PORT>/api /editor /flows /ui /settings /version   # 路径变换
+curl -H 'Accept: application/json' http://<IP>:<PORT>/ # 内容协商
+```
+
+**判据**：返回体是 **JSON 而不是 HTML** → 你找到了真正的 API，顺着它走。
+命中这类形态后 → 加载 `orchestration-platform-rce`（可视化编排/低代码平台专用）。
 
 ## 内网特有：端口转发后重新探测
 
-```text
+```
 🔴 内网服务通常只在 localhost 监听 → 先建端口转发再跑上述三步
 chisel 转发: chisel client <ATTACKER>:8000 R:8081:<INTERNAL_IP>:<PORT>
 然后 nc / curl / nmap 都指向 localhost:8081
-```text
+```
 
 ## 常见"nmap 不识别的端口"实际身份
 
@@ -103,17 +141,17 @@ chisel 转发: chisel client <ATTACKER>:8000 R:8081:<INTERNAL_IP>:<PORT>
 
 ## 卡了 5 分钟还没进展 → 判定
 
-```text
+```
 [ ] Banner 读出来了 → 搜到了软件名 → 回到 CVE 管道 ✅
 [ ] Banner 是乱码 → 是二进制协议 → 搜 `"<PORT> 端口 协议"` → 匹配? ✅
 [ ] 完全无响应 → 可能不是服务，是被防火墙拦截的端口 ❌ (跳过)
 [ ] 有响应但完全不懂 → 记下端口号 + banner hexdump → 跳过，先搞已知攻击面
     → 回来时搜 HackTricks + Google 该端口号
-```text
+```
 
 ## 🔴 最大教训
 
-```text
+```
 不能因为"不认识这个端口"就跳过它。
 但也不能因为"不认识"就在同一个端口上死磕。
 
@@ -121,7 +159,7 @@ chisel 转发: chisel client <ATTACKER>:8000 R:8081:<INTERNAL_IP>:<PORT>
   → 5 分钟内不能确定是什么协议 → 记下，跳过
   → 打完已确认的攻击面后 → 回来搜 HackTricks 这个端口号
   → 搜不到 → 可能是非预期端口 (SSH 在 2222, HTTP 在 8081)
-```text
+```
 
-**Why:** service-attacks 表覆盖 50+ 端口（以实际表为准），但你下一个 HTB 机器大概率会开表外端口。这套 SOP 是让你把"不认识"变成"5 分钟找到答案"，而不是跳过或死磕。
+**Why:** service-attacks 只有 41 个端口，但你下一个 HTB 机器大概率会开第 42 个。这套 SOP 是让你把"不认识"变成"5 分钟找到答案"，而不是跳过或死磕。
 **How to apply:** 任何 nmap 结果中标记为 unknown/tcpwrapped/generic 的端口 → 即时用这三步，不走查表路径。

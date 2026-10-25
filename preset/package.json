@@ -1,0 +1,12 @@
+{
+  "name": "@local/dsh-htb-preset",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "HTB preset for DeepSeek Harness: offensive-operator persona plus a trimmed tool set.",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}

@@ -1,0 +1,484 @@
+# dsh-htb-router bundle patch: inserts the host plugin row into the profile
+# roster. The router subscribes to session `tool/call` events, pattern-matches
+# the current attack stage against `rules`, and injects the matching HTB skill
+# card bodies straight into the agent context — skill selection is taken out
+# of the model's decision loop.
+#
+# NOTE: YAML single quotes keep backslashes literal — regex sources are written
+# exactly as the RegExp constructor receives them ('\b' = one backslash).
+#
+# 故意不进规则表的卡(由 persona 路由层负责,注入只会制造噪声):
+#   box-startup / htb-workflow / htb-methodology / htb-master-checklist /
+#   quickref-cards / parallel-recon / attack-surface-meta / chain-primitives /
+#   derive-command / no-hint 系列之外的全部 meta 流程卡 /
+#   web-attacks / service-attacks(T1 门面卡,四轮验证模型可靠加载)
+#
+# Activate with:
+#   dsh plugin --profile <name> add link:/path/to/dsh-htb-router
+- insert:
+    - id: htb-router
+      name: 'dsh-htb-router'
+      config:
+        # 卡正文优先走 ctx.skills registry（~/.dsh/skills 的 provider），
+        # skillsRoot 只是 registry miss 时的文件系统兜底 —— 必须指向真实卡库，
+        # 原值 '/root/dsh-htb-skills/skills' 是 Kali 路径，在 Windows 上静默失效。
+        skillsRoot: 'C:/Users/Administrator/.dsh/skills'
+        # 编排器写账本（shell-bootstrap 规则的 state 事件）找 <box>-state.jsonl 的目录；
+        # 原默认 '/root/htb' 在 Windows 上不存在 ⇒ appendStateEvent 恒返回 false（静默失效）。
+        stateRoot: 'C:/Users/Administrator/AppData/Roaming/reasonix/global-workspace/loot'
+        # ── L1c 状态驱动规则（2026-10-17 新增）──────────────────────────────
+        # 关键词规则问"这条命令**像**什么阶段"；状态规则问"台账里**已知**什么、还缺什么"。
+        # `when` 的条件之间是 AND；每条每会话只触发一次；命中后与关键词命中共用 cap 与去重。
+        # 这是把路由从"猜"变成"知道"的最小一步（依据：ARTEMIS 的任务状态驱动 / Intentest 的黑板）。
+        stateRules:
+          - id: cred-without-lateral
+            label: '有凭据但未登记横向意图'
+            when:
+              hasFactKind: cred
+              minFacts: 2
+              noIntentMatching: 'lateral|spray|pivot|横向|喷洒|复用|reuse'
+            cards: ['lateral-movement', 'credential-spraying-password-reuse']
+            note: |
+              ⚡ **状态驱动**路由（本次不是关键词命中）：台账里已有 cred 事实，但没有登记任何
+              "横向/喷洒"意图。凭据到手后的第一步通常是**先喷洒再判断**（同一个口令试遍所有服务
+              与用户），并把结果登记成新的 fact/intent —— 而不是拿着它深挖单点。
+        # 原值 15：最坏 15 × maxCardBytes(20KB) = 300KB 注入，会撑爆上下文。
+        # 降到与代码默认/README 一致的 8。
+        maxInjections: 8
+        # 🔴 2026-10-17 二次收口：原 20000 只是"**单卡**上限"，而 maxCardsPerCall(3) × 20KB
+        # 一次仍可达 60KB —— 实测本机一个会话被注入约 30 张卡、上下文被淹没。
+        # 改成 4000 后单次上限 12KB（降 80%）。依据：卡正文里最值钱的是**开头的触发信号与判据**；
+        # 命令细节缺失时模型本来也会用 skill 加载全文（截断提示已改写、明确指向这一步）。
+        maxCardBytes: 4000
+        rules:
+          # ── 云 / SSRF ─────────────────────────────────────────────
+          - id: ssrf-cloud
+            label: 'SSRF / 云元数据'
+            # 2026-10-17 去掉 `send_message` —— 它是 DSH 的子代理通信工具名，
+            # 与 SSRF 无关；留着会导致"每用一次子代理就给模型灌两张云卡"。
+            pattern: '169\.254|IMDS|gopher://|file://|url.?fetch|fetch.?url|ssrf|metadata/iam'
+            cards: ['ssrf-protocol-matrix', 'aws-attack-surface']
+          - id: aws-main
+            label: 'AWS 服务'
+            # 2026-10-17 收紧：原值含 \bsts\b|\bsqs\b|\bsns\b|\blambda\b|\biam\b|\bec2\b|\becs\b
+            # 这些**裸词**在非 AWS 语境遍地都是（尤其 `lambda` = Python/JS 的 lambda 表达式）。
+            # 实测本会话 `aws-attack-surface` 被误注入 4 次。改为只留"只会在 AWS 语境出现"的强锚：
+            # `aws` 命令本身、awscli、boto3、cloudformation、s3api、.amazonaws.com。
+            # ⇒ `aws s3 ls` / `aws sts get-caller-identity` / `aws iam list-users` 照样命中（因为含 aws），
+            #   但裸 `lambda`、裸 `iam` 不再误伤。
+            pattern: '\baws\b|awscli|aws-cli|get-caller-identity|boto3|cloudformation|s3api|\.amazonaws\.com'
+            cards: ['aws-attack-surface', 'cloud-attacks']
+          - id: aws-kms
+            label: 'LocalStack / KMS'
+            pattern: 'localstack|kms.*decrypt|decrypt.*kms|encryption_key'
+            cards: ['aws-kms-decrypt-localstack']
+          - id: minio
+            label: 'MinIO / S3 对象存储'
+            pattern: 'minio|s3://|list-buckets|presign'
+            cards: ['minio-s3-pentesting']
+          - id: codebuild-escape
+            label: 'CodeBuild / 云构建逃逸'
+            # 2026-10-17 收紧：去掉 `privilegedMode` 与 `BASH_FUNC` —— 这两个是容器/逃逸语境的
+            # 通用词，不是 AWS 专有（本会话该 note 被误触发 6 次）。
+            pattern: 'codebuild|buildspec'
+            # 原值 ['codebuild-floci-escape'] —— 该卡不在 ~/.dsh/skills（实测 163 卡里无此项）。
+            # 悬空引用会让本规则命中后 loadCardBody 返回 undefined ⇒ parts 为空 ⇒ **整条规则静默失效**
+            #（连提示都不注入）。降级为 note-only，先保证提醒能落地。
+            cards: []
+            note: |
+              ⚡ 场景命中：CodeBuild / 云构建逃逸。⚠️ 本规则暂无对应技能卡
+              （codebuild-floci-escape 尚未入库，属已知缺口）。下一步别硬猜，按框架纪律走：
+              ① 先用 skill 工具加载 htb-skill-index，按 domain 定位该域现成卡；
+              ② 判定面先问三句：构建环境是否特权、能否触达 docker.sock / 宿主挂载、
+                 buildspec 的 phases 里哪一步的命令可控；
+              ③ 拿到任何"能执行"的证据就落 evidence_add，再谈逃逸。
+          # ── 容器 / Linux ─────────────────────────────────────────
+          - id: container
+            label: '容器环境'
+            pattern: 'dockerenv|\bdocker\b|kubectl|kubepods|cgroup|\bpodman\b|containerd|/\.docker'
+            cards: ['container-escape']
+          - id: linux-privesc
+            label: 'Linux 提权'
+            pattern: 'sudo -l|linpeas|pspy|getcap|suid|find / -perm|uname -a|pkexec'
+            cards: ['linux-privesc']
+          - id: sudo-escape
+            label: 'sudo 逃逸'
+            pattern: 'sudo\s+(less|vim|vi|find|awk|man|nmap|git|ftp|more|ed)|gtfobins'
+            cards: ['sudo-escape-techniques']
+          - id: cron
+            label: 'cron 提权'
+            pattern: 'crontab|/etc/cron|watchdog.*cron|cron\.d'
+            cards: ['cron-privesc-patterns']
+          - id: nfs
+            label: 'NFS 提权'
+            pattern: 'showmount|no_root_squash|\bnfs\b|/etc/exports'
+            cards: ['nfs-privesc']
+          - id: shared-object
+            label: '共享库劫持'
+            pattern: 'ldd|LD_PRELOAD|ld\.so|shared.?object|\.so\.1'
+            cards: ['shared-object-hijacking']
+          - id: lotl
+            label: 'Living off the land'
+            pattern: 'living.?off|gtfobins'
+            cards: ['living-off-the-land']
+          - id: overlayfs
+            label: 'overlayfs 提权'
+            pattern: 'overlayfs|upperdir|lowerdir|workdir='
+            cards: ['overlayfs-privesc']
+          - id: rbash
+            label: '受限 shell 逃逸'
+            pattern: 'rbash|restricted.?shell|RBASH'
+            cards: ['rbash-escape']
+          - id: noncontainer
+            label: '非容器沙箱逃逸'
+            pattern: 'firejail|sandbox.?escape|\bchroot\b|bwrap'
+            cards: ['noncontainer-sandbox-escape']
+          - id: git-object
+            label: 'Git 对象路径穿越'
+            pattern: 'git.*path.?traversal|\.git/objects|git2json|path.?traversal.*git'
+            cards: ['git-object-path-traversal']
+          - id: cobbler
+            label: 'Cobbler'
+            pattern: 'cobbler|25151'
+            cards: ['cve-2024-47533-cobbler-rce']
+          - id: januscape
+            label: 'KVM 逃逸'
+            pattern: 'januscape|kvm.*escape|/dev/kvm'
+            cards: ['cve-2026-53359-januscape-kvm-escape']
+          - id: persistence
+            label: '持久化'
+            pattern: 'persistence|backdoor|ssh.*authorized_keys|cron.*reverse'
+            cards: ['persistence']
+          - id: internal-enum
+            label: '内部摸底'
+            pattern: '内部枚举|五维摸底|ss -tlnp|internal.*enum'
+            cards: ['enumeration-command-layer']
+          # ── AD / Windows ─────────────────────────────────────────
+          - id: ad-entry
+            label: 'AD 域入口'
+            pattern: '\bldap\b|kerberos|ntlm|smbclient|rpcclient|\bnetexec\b|bloodhound|mimikatz|rubeus|certipy|krbtgt|domain.?controller|\bdc\b'
+            cards: ['ad-checklist', 'ad-type-recognition']
+          - id: ad-advanced
+            label: 'AD 高级攻击'
+            # 🔴 `getst` 加边界（2026-10-17 实测）：裸 `getst` 命中 **getstatus**（任意状态的查询文本）。
+            # 加边界后仍能匹配 `getST.py` / `getST -spn`（后接 . 或空格），不影响真信号。
+            pattern: 'certipy|adcs|\besc[1-9]\b|rubeus|\bgetst\b|s4u2|rbcd|ntlmrelayx|dcshadow|sccm|mecm|\blaps\b|rodc|krbtgt_|adminCount|adminsdholder|dnsadmin|dsrm'
+            cards: ['adcs-attack-chain', 'rbcd-spnless', 'ntlm-relay-chain', 'rodc-privesc-chain', 'adminsdholder-abuse', 'dnsadmins-privesc', 'sccm-attacks', 'laps-password-extraction', 'dsrm-credentials', 'dcshadow']
+          - id: ad-lateral
+            label: '横向移动'
+            # 🔴 短词必须带边界（2026-10-17 实测）：裸 `PtH` 会命中 `depth` / `search_depth`
+            #（tavily 的 search_depth 参数即踩过），把任意含 "pth" 的文本判成横向移动阶段。
+            # ⚠️ 但**不能**给所有短词无脑加 \b —— 例如 `ntlm` 若加边界就匹配不到 `ntlmrelayx`（那是真信号）。
+            pattern: 'psexec|wmiexec|smbexec|pass.?the|\bPtH\b|\bPtT\b|\bPtK\b|evil-winrm'
+            cards: ['lateral-movement']
+          - id: windows-privesc
+            label: 'Windows 提权'
+            pattern: 'whoami /priv|seimpersonate|potato|winpeas|accesschk|alwaysinstallelevated'
+            cards: ['windows-privesc']
+          - id: edr
+            label: 'EDR/AV 绕过'
+            # 🔴 `etw` 加边界（2026-10-17 实测）：裸 `etw` 命中 **network** / networking / networked
+            #  —— 而 network 是渗透作业里最高频的词之一，等于任何提到"网络"的命令都灌一张 EDR 卡。
+            pattern: 'amsi|\betw\b|\bedr\b|byovd|defender|mimikatz.*blocked|av.*bypass'
+            cards: ['edr-evasion']
+          - id: exchange
+            label: 'Exchange / OWA'
+            pattern: 'exchange|\bowa\b|\bews\b|autodiscover'
+            cards: ['exchange-owa-attacks']
+          - id: sid-history
+            label: 'SID History / 跨林'
+            pattern: 'sid.?history|history.*inject|cross.?forest|domain_trusts'
+            cards: ['sid-history-injection']
+          - id: dll-hijack
+            label: 'DLL 劫持'
+            pattern: 'dll.?hijack|search.?order|procmon.*dll|missing.*dll'
+            cards: ['dll-hijacking-practical']
+          - id: username
+            label: '用户名生成'
+            pattern: 'username.?generation|name.?anarchy|user.?list.*generate'
+            cards: ['username-generation']
+          - id: kerberos-only
+            label: 'Kerberos-only 域'
+            pattern: 'kerberos.?only|ntlm.*disabled|etype.*not.*supported'
+            cards: ['kerberos-only-ad']
+          - id: double-hop
+            label: 'Kerberos 双跳'
+            pattern: 'double.?hop|credssp|delegat.*hop'
+            cards: ['kerberos-double-hop']
+          - id: protected-users
+            label: 'Protected Users'
+            pattern: 'protected.?users|neverdelegate'
+            cards: ['protected-users-kerberos-only']
+          - id: printnightmare
+            label: 'PrintNightmare / Spooler'
+            pattern: 'printnightmare|spooler|printer.*bug'
+            cards: ['printnightmare-printer-leaks']
+          - id: dotnet-pipe
+            label: '.NET 管道 YAML 反序列化'
+            pattern: 'dotnet.?pipe|yamldotnet|named.?pipe.*deserializ'
+            cards: ['dotnet-pipe-yaml-deserialization']
+          - id: scf-ntlm
+            label: 'SCF/LNK NTLM 窃取'
+            pattern: '\bscf\b|\.lnk.*ntlm|url.*ntlm.*hash|desktop\.ini'
+            cards: ['scf-ntlm-theft']
+          - id: rdp-inception
+            label: 'RDP Inception'
+            pattern: 'rdp.?inception|sticky.?keys.*rdp'
+            cards: ['rdp-inception']
+          - id: pre2k
+            label: 'Pre2k 机器账户'
+            pattern: 'pre2k|pre.?2000|computer.*account.*password'
+            cards: ['pre2k-attack']
+          # ── 数据库 / 消息中间件 ──────────────────────────────────
+          - id: mssql
+            label: 'MSSQL'
+            pattern: 'mssql|xp_cmdshell|sqlcmd|1433|mssqlclient'
+            cards: ['mssql-attack-chain']
+          - id: mysql
+            label: 'MySQL UDF'
+            pattern: 'mysql.*udf|udf.*mysql|3306.*mysql|plugin_dir'
+            cards: ['mysql-udf-privesc']
+          - id: postgres
+            label: 'PostgreSQL'
+            pattern: 'postgres|\bpsql\b|5432|lo_import|pg_read_file'
+            cards: ['postgresql-rce']
+          - id: h2
+            label: 'H2 数据库'
+            pattern: '\bh2\b|RUNSCRIPT|h2.*alias|autoDeserialize'
+            cards: ['h2-java-alias-rce']
+          - id: kafka
+            label: 'Kafka'
+            pattern: 'kafka|9092|kafka-console|producer.*topic'
+            cards: ['kafka-pentesting']
+          - id: mongodb
+            label: 'MongoDB'
+            pattern: 'mongodb|\bmongo\b|\$lookup|aggregation.*inject'
+            cards: ['mongodb-aggregation-injection']
+          - id: cypher
+            label: 'Neo4j / Cypher'
+            pattern: 'cypher|neo4j|7687|\bload csv\b'
+            cards: ['cypher-injection']
+          - id: pgadmin
+            label: 'pgAdmin'
+            pattern: 'pgadmin|query_commited'
+            cards: ['pgadmin-cve-2025-2945-rce']
+          - id: mariadb-quirk
+            label: 'MariaDB quirk'
+            pattern: 'mariadb.*10\.1|nested.*func.*where'
+            cards: ['quirk-mariadb-10-1-nested-func-where']
+          # ── Web ───────────────────────────────────────────────────
+          - id: log4shell
+            label: 'Log4Shell'
+            pattern: 'log4j|log4shell|jndi|\$\{jndi'
+            cards: ['log4shell-cve-2021-44228']
+          - id: shellshock
+            label: 'Shellshock'
+            pattern: 'shellshock|cgi.*6271|bash.*env.*inject'
+            cards: ['shellshock-cve-2014-6271']
+          - id: struts
+            label: 'Struts'
+            pattern: 'struts|ognl|apache.*struts'
+            cards: ['apache-struts-rce']
+          - id: opensta
+            label: 'OpenSTAManager'
+            pattern: 'opensta|openstamanager|p7m'
+            cards: ['cve-2025-69212-openstamanager-rce']
+          - id: olivetin
+            label: 'OliveTin'
+            pattern: 'olivetin|StartActionAndWait'
+            cards: ['cve-2026-27626-olivetin-rce']
+          - id: krayin
+            label: 'Krayin CRM'
+            pattern: 'krayin|laravel-crm'
+            cards: ['krayin-crm-attacks']
+          - id: cms
+            label: 'CMS / 框架'
+            pattern: 'wordpress|joomla|drupal|magento|laravel|django|spring.?boot|wp-admin|wp-login'
+            cards: ['cms-framework-rce']
+          - id: flask-session
+            label: 'Flask session 伪造'
+            pattern: 'flask.*session|itsdangerous|secure.?cookie'
+            cards: ['flask-session-forgery']
+          - id: smuggling
+            label: 'HTTP 走私'
+            pattern: 'request.?smuggl|cl\.te|te\.cl|transfer-encoding.*chunk'
+            cards: ['http-request-smuggling']
+          - id: log-poison
+            label: '日志投毒 LFI'
+            pattern: 'log.?poison|user.?agent.*log|lfi.*rce.*log'
+            cards: ['log-poisoning-lfi-rce']
+          - id: proto-pollution
+            label: '原型污染'
+            pattern: 'prototype.?pollution|__proto__|constructor\.prototype'
+            cards: ['prototype-pollution']
+          - id: ssti-sandbox
+            label: 'SSTI / Python 沙箱'
+            pattern: 'ssti|jinja|\{\{.*\}\}.*7\*7|python.*sandbox|builtins.*import'
+            cards: ['python-sandbox-escape']
+          - id: xml-xxe
+            label: 'XXE / XSLT'
+            pattern: 'xxe|xslt|xml.*inject|DOCTYPE.*entity'
+            cards: ['xml-attacks-beyond-xxe', 'xslt-injection']
+          - id: soap-wcf
+            label: 'SOAP / WCF'
+            pattern: 'soap|wcf|basicHttpBinding|wsdl'
+            cards: ['soap-wcf-injection']
+          - id: webauthn
+            label: 'WebAuthn'
+            pattern: 'webauthn|passkey|attestation|fido'
+            cards: ['webauthn-xss']
+          - id: chrome-cdp
+            label: 'Chrome CDP'
+            pattern: 'chrome.*devtools|remote-debugging|cdp.*discover|--remote-allow'
+            cards: ['chrome-cdp-discovery']
+          - id: voice-xss
+            label: '语音转文字 XSS'
+            pattern: 'voice.*symbol|whisper-wrapper|speech.*xss'
+            cards: ['voice-symbol-xss']
+          - id: string-replace-xss
+            label: 'String.replace XSS'
+            pattern: 'string\.replace|replacement.*sequence'
+            cards: ['string-replace-dollar-sequence-xss']
+          - id: cmd-inject
+            label: '命令注入绕过'
+            pattern: 'command.?inject|cmd.?inject|regex.*bypass.*inject|exit.?code.*precheck'
+            cards: ['command-injection-regex-bypass', 'cmd-injection-exit-code-precheck']
+          - id: bash-array
+            label: 'Bash 数组下标注入'
+            pattern: 'bash.*array|subscript.*inject'
+            cards: ['bash-array-subscript-injection']
+          - id: ocr-rce
+            label: 'OCR 文件写 RCE'
+            pattern: 'ocr.*rce|tesseract.*write|image.*text.*extract'
+            cards: ['ocr-file-write-rce']
+          - id: chained
+            label: '多步攻击链'
+            pattern: 'chained.*attack|multi.?step.*chain|attack.?chain'
+            cards: ['web-chained-attacks']
+          # ── 凭据 ─────────────────────────────────────────────────
+          - id: password-attacks
+            label: '密码攻击 / 破解'
+            pattern: 'hashcat|\bjohn\b|kerberoast|asrep|hydra|hash.*crack|mode.*18200'
+            cards: ['password-attacks']
+          - id: spraying
+            label: '凭据喷洒'
+            pattern: 'spray|password.?reuse|crackmapexec.*pass|netexec.*password'
+            cards: ['credential-spraying-password-reuse']
+          - id: default-creds
+            label: '默认凭据'
+            pattern: 'default.*cred|admin:admin|common.*password.*list'
+            cards: ['default-credentials']
+          - id: shucking
+            label: 'Hash shucking'
+            pattern: 'shuck|nt.?candidate'
+            cards: ['hash-shucking']
+          - id: mirth
+            label: 'Mirth Connect'
+            pattern: 'mirth|connect.*hash'
+            cards: ['mirth-connect-hash-crack']
+          - id: freeipa
+            label: 'FreeIPA'
+            pattern: 'freeipa|ipa user|ldapmodify|ipaNTHash'
+            cards: ['freeipa-pentesting']
+          # ── 网络 / 取证 / 工具 ───────────────────────────────────
+          - id: unknown-service
+            label: '未知服务'
+            pattern: 'unknown.*service|magic.?bytes|banner.*grab|port.*unknown'
+            cards: ['unknown-service-probe']
+          - id: snmp
+            label: 'SNMP'
+            pattern: 'snmp|161/udp|snmpwalk'
+            cards: ['snmp-enumeration']
+          - id: tunneling
+            label: '隧道 / 端口转发'
+            pattern: 'chisel|ligolo|socat|\bsocks\b|port.?forward|proxychains'
+            cards: ['tunneling-port-forwarding']
+          - id: sherlock
+            label: '取证 / Sherlocks'
+            pattern: 'sherlock|forensic|volatility|evtx|memory.?dump'
+            cards: ['sherlock-investigation']
+          - id: malware
+            label: '恶意样本分析'
+            pattern: 'malware.*analysis|yara|\bupx\b|packed.*sample|pefile'
+            cards: ['malware-static-analysis']
+          - id: netexec
+            label: 'NetExec'
+            pattern: 'netexec|\bnxc\b|crackmapexec'
+            cards: ['netexec-reference', 'netexec-escape']
+          - id: evil-winrm
+            label: 'evil-winrm'
+            pattern: 'evil-winrm|winrm'
+            cards: ['evil-winrm-path-escaping']
+          - id: impacket-tools
+            label: 'impacket 工具链'
+            # 🔴 同 `getst`：裸 `getST` 命中 `getstatus`（`i` 标志下与 getst 等价）。
+            # ⚠️ 反之 `getTGT` / `secretsdump` 等长词不动 —— 它们不会藏在普通英文词里。
+            pattern: 'impacket|mssqlclient|secretsdump|getTGT|\bgetST\b'
+            cards: ['kali-tools-augmented']
+          # ── 卡壳 ─────────────────────────────────────────────────
+          - id: stuck
+            label: '卡壳'
+            pattern: '卡住|卡壳|同方向.*失败|failed.*3|第三次.*失败'
+            cards: ['debug-5whys', 'blocking-points-detail', 'htb-skill-index']
+          - id: new-box
+            label: '新题型'
+            pattern: '无记忆|no.?hint|新题型|自主发现'
+            cards: ['no-hint-solving']
+          # ── 捕获判定（flag/cred 证据链强制） ─────────────────────
+          - id: flag-capture
+            label: 'flag 捕获判定'
+            pattern: '(cat|type|get-content|more)\s+[^;|&]{0,80}(flag\.txt|user\.txt|root\.txt)|open\([^)]{0,60}(flag\.txt|user\.txt|root\.txt)'
+            # 原值 ['capture-verdict'] —— 该卡不在 ~/.dsh/skills（实测 163 卡里无此项）。
+            # 本规则原本没有 note，悬空引用导致命中后**什么都不注入**（整条规则完全失效）。
+            # 降级为 note-only，补上框架既有的 flag 捕获纪律。
+            cards: []
+            note: |
+              ⚡ 阻断点 FLAG_CAPTURE：读到 flag 之前先把三件事做对 ——
+              ① 证据：flag 的**原始命令行 + 完整输出**落 evidence_add（只贴 flag 字符串不算证据）；
+              ② 判否先给对照：说"这里没有 flag"之前，先用同一命令读一个确定存在的文件，
+                 证明命令与路径解析是活的（框架硬规则：没有对照的全否不是结论）；
+              ③ 提交前核对本题要求的 flag 形态，别把别的题/别的阶段的字符串交上去。
+          # ── shell 建立（编排器写账本 + 硬门声明） ─────────────────
+          - id: shell-bootstrap
+            label: 'shell 建立 / PTY 升级'
+            pattern: 'import\s+pty|pty\.spawn|stty raw -echo|script -qc|nc\s+-lvnp|ncat\s+-lvnp|socat[^|;]{0,40}LISTEN|bash -i >& /dev/tcp|mkfifo /tmp/f'
+            cards: []
+            note: |
+              🔴 阻断点 SHELL_BOOTSTRAP（shell 已建立）：立即向 <box>-state.jsonl 追加一条 access 事件——
+              {"ts":"<当前ISO时间>","type":"access","who":"<user>@<host>","what":"<怎么拿到的shell>","evidence":"<建立shell的确切命令>"}
+              这是硬阻断点：不写 access 事件不得进入提权/横向。router 已自动写入一条兜底事件，你补写语义即可。
+            state: { type: 'access', what: 'shell established (router-detected)' }
+          # ── 2026-10-22 补：Insane 核心能力卡的路由 ─────────────────────
+          # 依据 536 台官方 WP 蒸馏：crypto / reverse / exploit-dev / ad-attack
+          # 在 Insane 各占 14.9%，在 Easy 几乎为 0；而对应卡片早已写好却从未被路由。
+          # 规则 pattern 全部从各卡自己的 whenToUse 推导，不是凭空设计的关键词。
+          - id: crypto-oracle
+            label: '密码学：预言机 / 弱密钥 / 可预测随机'
+            pattern: '\becb\b|\bcbc\b|padding oracle|密文|明文.{0,6}密文|密文.{0,6}明文|加密\s*zip|不透明.{0,4}(cookie|token)|ciphertext|modulus|\.pub\b|authorized_keys|id_rsa|prng|mt19937|srand\('
+            cards: ['crypto-classic-attack-patterns', 'weak-rsa-key-recovery', 'weak-prng-predictable-seed']
+          - id: binary-pwn
+            label: '二进制：ROP / 深调用 / BYOVD'
+            pattern: '\brop\b|pwntools|checksec|栈溢出|缓冲区溢出|buffer overflow|ret2|LoadLibraryExW|CreateFileW|GetModuleHandleW|byovd|\.sys\b|内核驱动'
+            cards: ['linux-binary-stack-rop', 'windows-rop-deep-call', 'windows-byovd-kernel-rw']
+          - id: ad-advanced
+            label: 'AD 高级：跨林信任 / 联邦 / groupType'
+            pattern: 'domain_trusts|Get-ADTrust|林信任|跨林|forest trust|adfs|federation|联邦|TKSKey|groupType|bloodyAD'
+            cards: ['ad-trust-and-forest-pivot', 'federation-identity-abuse', 'group-type-abuse']
+          - id: cred-hunting
+            label: '立足点后从目标自身找凭据'
+            pattern: '找凭据|credential hunt|unattended\.xml|\.bash_history|web\.config.{0,20}connectionString|grep.{0,10}passw|config.{0,10}password'
+            cards: ['credential-hunting-locations']
+          - id: waf-bypass
+            label: 'WAF / 过滤拦截'
+            pattern: '\bwaf\b|被\s*403|403.{0,10}拦|filter bypass|bypass.{0,10}filter'
+            cards: ['waf-filter-bypass-patterns']
+          - id: idor
+            label: '越权 / 对象引用'
+            pattern: '\?fileId=|\?id=\d|idor|role=|isAdmin|越权|自增.{0,4}id'
+            cards: ['broken-access-control-idor']
+          # ── 2026-10-25：SQLi 先判原语（Watcher 4.5 小时 + DutyBound 12 分钟的教训）──
+          # 两次都是"在测能不能写之前，先投入怎么读得更快"。这张卡把 30 秒三测前置。
+          - id: sqli-primitive
+            label: 'SQL 注入：先判原语再提取'
+            pattern: 'sql injection|\bsqli\b|注入点|union select|information_schema|pg_sleep|sleep\(\s*\d|报错注入|盲注|extractvalue|updatexml|load_file|into outfile'
+            cards: ['sql-injection-primitive']

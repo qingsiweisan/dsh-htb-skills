@@ -1,0 +1,36 @@
+{
+  "name": "dsh-htb-router",
+  "description": "Deterministic skill router for DeepSeek Harness HTB sessions: subscribes to session tool/call events, pattern-matches the current attack stage, and injects the matching HTB skill card bodies directly into the agent context — removing skill selection from the model's decision loop. Black-box technique based; no per-box data.",
+  "version": "0.1.0",
+  "type": "module",
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "dependencies": {
+    "@deepseek-ai/dsh-llm": "^0.1.0-rc.5"
+  },
+  "files": [
+    "src/**/*.js",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "deepseek-harness",
+    "dsh-plugin",
+    "hackthebox",
+    "pentest",
+    "skill-routing"
+  ],
+  "license": "MIT"
+}

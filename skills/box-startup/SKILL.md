@@ -1,10 +1,10 @@
 ---
 name: 'box-startup'
-description: 'HTB 靶机启动：5件必做→双轨查询→粘滞点匹配→key-state 落盘契约。核心骨架，战术细节按需加载。'
-whenToUse: '开始打一台新 HTB 靶机时：5 件必做 + 双轨查询 + 粘滞点匹配 + key-state 产物规范，其余战术按需加载。'
+description: 'HTB 靶机启动：5件必做→双轨查询→粘滞点匹配。核心骨架，战术细节按需加载。（检索词：box-startup/recon/nmap/enumeration/sticky/startup/htb/box startup）'
+whenToUse: '开始打一台新 HTB 靶机时：5 件必做 + 双轨查询 + 粘滞点匹配，其余战术按需加载。'
 metadata: { domain: meta, tier: T1 }
 ---
-> 📌 DSH 用法：用 skill 工具按名加载本卡。
+> 📌 DSH 适配：本技能移植自 RS。原 read_skill/run_skill 调用 = 用 DSH 的 skill 工具按名加载对应技能；fleet/kali-mcp = 用 bash 后台任务与 subagent 工具实现。
 
 # HTB 靶机启动流程
 
@@ -12,33 +12,36 @@ metadata: { domain: meta, tier: T1 }
 
 ## ⛔ 禁止行为
 
-```text
-❌ "我看到 X，可能是什么？" → 读工作区的 <box>-state.jsonl 键状态文件（见「key-state 规范」）！
-❌ "接下来怎么办？" → 先查「阶段0 决策路由」，读工作区的 <box>-state.jsonl 再分流！
-❌ "我好像卡住了" → debug-5whys！
+```
+❌ "我看到 X，可能是什么？" → 查 KG/memory！
+❌ "接下来怎么办？" → 先查「阶段0 决策路由」：未进入 auto-pwn 模式 → 查 KG/memory；已进入 → 走 auto-pwn 主循环！
+❌ "我好像卡住了" → /debug-5whys！
 ❌ 同一路径失败 ≥3 次 → 强制 debug-5whys
 ❌ AES256 Kerberoast → 不爆破，换委派路径
 ❌ 工具第一次认证失败 → 先查「工具局限表」确认是否支持此认证方式
 ❌ 攻击链已写在文档里 → 不自行"探索"已排除的死路
 🆕 ❌ 不看 --help 直接敲命令
 🆕 ❌ 凭记忆编 CVE 编号
-🆕 ❌ 手写反弹 shell（用 quickref-cards 里的模板：bash -i 与 mkfifo 两版）
+🆕 ❌ 手写反弹 shell（用 AGENTS.md 模板）
 🆕 ❌ Windows 命令用 - 代替 /
 🆕 ❌ 模型说"X 有 Y 漏洞"不验证直接执行
-```text
+```
 
 ## 🔴 启动时必做 5 件事
 
-```text
+> 🔴 **动手前先加载 `command-safety-red-lines`（操作安全红线）** —— 那些坑一次就能造成事故
+> （杀掉自己的会话 / 卡死 PTY / 打挂靶机），**不能等"操作不通"时才查**。
+
+```
 [1] 时钟同步: ntpdate -b <DC_IP>  (Kerberos 不工作的第一原因)
 
 [2] 加载记忆: 本地笔记「<靶机名>」 → 复用上次攻击链
-    记忆匹配≥2 → 直接读该靶机记录，不再从头枚举
+    KG 匹配≥2 → 直接读 entity，不再从头枚举
 
 [3] 隧道方案: 只建一种 (首选 chisel SOCKS)，不混用
     验证: ss -tlnp | grep <端口> && ps aux | grep chisel
 
-[4] 凭据去交互: 拿到任何密码/TGT 立刻写 <box>-state.jsonl（cred 事件）+ 存 <box>-creds.txt，不每次手工输入
+[4] 凭据去交互: 拿到任何密码/TGT 立刻存文件，不每次手工输入
 
 [5] 已知链复用: 记忆中有完整链 → 逐步骤原样执行 → 卡住才分析
     🔴 已知链重打 = 变更检测，不是重扫:
@@ -46,17 +49,17 @@ metadata: { domain: meta, tier: T1 }
         b. 入口未变 → 直接走原链，跳过 nmap -p- 全端口重扫
         c. 入口变了（版本/端点/认证/404）→ 才回到阶段1 全量扫描
         d. 每步验证配置是否变化（Browsed: marimo 从无认证→token 认证 = 变化信号）
-```text
+```
 
 ## 🆕 核心原则速查
 
-```text
+```
 🔴 控制账户 ≠ 知道密码 → 委派模拟优先于找密码
 🔴 AES256 Kerberoast → 不可爆破 → 换委派路径
 🔴 MSSQL 连接必须用 FQDN 不能用 IP → SPN 匹配
 🔴 groupType Global→Domain Local 不可直跳 → 经过 Universal
 🔴 certipy template 不支持 Kerberos ccache → bloodyAD set object
-```text
+```
 
 ## 🆕 工具局限表
 
@@ -79,17 +82,35 @@ metadata: { domain: meta, tier: T1 }
 | `KDC_ERR_PADATA_TYPE_NOSUPP` | KDC 无 CA | 换 RBCD 路径 |
 | `KRB_AP_ERR_SKEW` | 时钟偏差 | `ntpdate -b <DC_IP>` |
 | `KRB_AP_ERR_MODIFIED` (SOCKS) | SOCKS 破坏 Kerberos | 换直接端口转发或本地操作 |
-| （完整粘滞点表见 blocking-points-detail 卡） | | |
+| chisel 端口通但数据断流 | chisel 进程已死 | `ps aux \| grep chisel` 验证后重建 |
+| `STATUS_USER_SESSION_DELETED` | ccache 过期/时钟偏差 | 同步时钟 + 刷新 TGT |
+| `certipy shadow auto` 返回 `None` | 加了 `-dc-host` | **去掉 `-dc-host`**，只用 `-target` |
+| dnstool.py NXDOMAIN (SOA) | Kali DNS 不能解析域 | `echo "nameserver <DC_IP>" > /etc/resolv.conf` |
+| WUA XML 0x8024000E | WSUS SOAP `&` 未转义 | `html.escape(html.escape(cmd))` |
+| WSUS Broken pipe | GetConfigResponse 不完整 | 用 PyWSUS 模板，不手搓 |
+| 命令注入返回 `\x00` 无效果 | Popen 非阻塞 / `\|\|` vs `;` | 先查 subprocess 调用方式，用 `;` 分隔 |
+| 目录有 `exploit_*.py` 被忽略 | 旧 exploit 没被发现 | 🔴 先跑已有脚本再试其他 |
+| 🆕 WCF/SOAP 返回 400/500 | 缺 SOAPAction header | `curl -X POST URL -H 'SOAPAction: "urn:IService/M"'` |
+| 🆕 nxc PowerShell 无输出 | stdout 被吞，不是失败 | xec output → 写文件 → type; 或用 evil-winrm |
+| 🆕 relay 反复失败 (Server 2022+) | EPA 默认开启, relay 不可行 | 放弃 relay → 直接 PtH/PtT/Kerberoast |
+| 🆕 PTY 退出后后台进程死 | socat PTY kill bg jobs | 双 session: session1 前台, session2 后台 |
+| 🆕 `IS_SRVROLEMEMBER('sysadmin')` = 0 | 只答"我是谁"，不答"谁是" | 查 `sys.server_role_members` 完整成员表（Signed: SIGNED\IT 是 sysadmin 但 IS_SRVROLEMEMBER 全 0） |
+| 🆕 `net use \\host:port\share` error 67 | SMB UNC 不支持端口 | relayx 必须监听 445，诱导 UNC 不带端口 |
+| 🆕 外部全封 + 已拿 RCE | 网络不可达≠死路 | ★立即 chisel SOCKS 隧道 → proxychains 访问内部端口（Signed: relay 走隧道=受害者自己连自己） |
+| 🆕 同一畸形 DNS 名重复诱导失败 | LSASS NTLM 认证缓存 | 换等效名（dc011UWhRC.../localhost1UWhRC.../signed1UWhRC...）或等待 |
 
 ## 🆕 困境分类 → 记忆映射表（卡住时先输出标签再动手）
 
-> 🔴 **机制：自动 recall 扫描对话文本匹配记忆索引。卡住时先输出"困境分类标签"（类型+关键词），让相关记忆自动送进上下文——不靠自觉想起。**
+> 🔴 **机制（DSH 版）：卡住时先输出"困境分类标签"，再按标签去查 —— 本 harness 没有 RS 的自动 recall 插件，标签不会自己把记忆送进上下文，它是给**你**用的检索键。**
 > 🔴 **输出格式（不可跳过）: `🔴 困境类型: <...> | 🔴 关键词: <隧道 relay 445 SMB...>`**
+> 拿到标签后的动作：① `mcp__memory__search_nodes("<关键词>")` ② `skill("htb-skill-index")` 定位卡名 →
+> `skill("<卡名>")` ③ 走 `htb-workflow` §RS 工具链执行层 [2] 的 history 配方。
+> ⚠️ 下表第三列原写"自动 recall 应命中的记忆"——DSH 下应读作"该标签要你去加载的卡"。
 
-| 困境类型 | 自动 recall 应命中的记忆 |
+| 困境类型 | 该标签要你去加载的卡 |
 |----------|------------------------|
-| 网络可达性/端口全封 | `tunneling-port-forwarding`（隧道）/ `unknown-service-probe` |
-| 权限不足（提权） | `linux-privesc` / `windows-privesc` |
+| 网络可达性/端口全封 | `tunneling-port-forwarding`（隧道）/ `ntlm-relay-chain`（CVE-2025-33073 反射链）/ `unknown-service-probe` |
+| 权限不足（提权） | `linux-privesc` / `windows-privesc` / `enumeration-command-layer` / `windows-privesc` |
 | 认证失败（AD） | `mssql-attack-chain` / `ntlm-relay-chain` / `kerberos-only-ad` / `adcs-attack-chain` |
 | 信息缺失/方向未知 | `enumeration-command-layer` / `unknown-service-probe` / `attack-surface-meta` / `no-hint-solving` |
 | 工具行为异常 | `blocking-points-detail`（三问表）/ `derive-command` / `netexec-escape` |
@@ -111,19 +132,21 @@ metadata: { domain: meta, tier: T1 }
 
 ## 阶段流程（v6 — 阻断点嵌入）
 
-```yaml
+```
 阶段0: 🔴 决策路由（先定模式，再分流）
-        ├─ 用户指定纯自动化任务 → 走自动化主循环（阻断点1/2/3 仍适用）
-        ├─ 默认手动模式 → 读本地笔记「<靶机名>」+ 工作区 <box>-state.jsonl（上次 run 键状态）
+        ├─ 用户指定 auto-pwn / 纯自动化任务 → ⚠️ **本 harness 无 orch 工具（orch_next 不存在），
+        │   该分支不可用** —— 只有默认手动模式。要在 DSH 上做自动化，用 subagent/workflow 自己编排。
+        ├─ 默认手动模式 → KG + memory 查询
         │   ├─ 命中≥2 → 复用已知链，逐步骤原样执行
-        │   └─ <2 → 加载 no-hint-solving（A–E 与进度文件阻断点4 二选一，不重复执行）
+        │   └─ <2 → 加载 no-hint-solving（A–E 与 AGENTS.md 阻断点4 二选一，不重复执行）
         └─ 两条路径切换必须显式声明，禁止中间态
-        🆕 🔴 todo_write 开局: 建 9 步阶段清单（映射 htb-workflow）→ 每步完成 todo_write 工具 签收
-阶段1: nmap 两步扫描 (PTY 全端口 → bash 工具 版本识别，禁 masscan) → 🔴 阻断点2: 侦察字典 (每个端口跑固定探测，不靠LLM探索)
+        🆕 🔴 todo_write 开局: 建 9 步阶段清单（映射 htb-workflow）→ 每步用 todo_write 改 status 签收
+            （⚠️ `complete_step` 是 RS 时代工具名，本 harness 不存在）
+阶段1: nmap 两步扫描 (PTY 全端口 → pwsh/bash 版本识别，禁 masscan) → 🔴 阻断点2: 侦察字典 (每个端口跑固定探测，不靠LLM探索)
         🆕 🔴 并行子代理/parallel-recon 强制: 版本扫描后，端口探测+搜索全部丢 subagent（2-8 并行）
-            → 主上下文只收结论摘要，细节 subagent 返回结果 按需取（Hercules: 串行灌爆上下文压缩3-4次）
+            → 主上下文只收结论摘要，细节向该 subagent 追问（send_message）或对后台任务读 job_output
+              （⚠️ `read_subagent_result` 是 RS 时代工具名，本 harness 用 subagent 自身返回值 + job_output）
         ├─ HTTP/S → whatweb + gobuster + ffuf vhost + curl headers
-        │    └─ 发现 URL 抓取/导入/回调/图片代理 → 🔴 先加载 ssrf-protocol-matrix 再动手测协议
         ├─ SMB → nxc 匿名 + smbclient 枚举
         ├─ 其他端口 → 查侦察字典表逐项执行
         ├─ 🔴 阻断点4: 攻击面穷举框架 (仅未加载 no-hint-solving 时执行；已加载 → 跳至其 A–E，二选一不重复)
@@ -136,9 +159,7 @@ metadata: { domain: meta, tier: T1 }
 阶段1.4: 环境指纹 — 交互型漏洞先拿版本号
 阶段1.5: 精简能力探测 — 指纹后只测不确定项
 阶段2: 利用 → 凭据喷洒所有服务 → 动态失败聚类
-        └─ 🆕 IMDS/云凭据到手 → 🔴 先加载 aws-attack-surface 再枚举 AWS 服务（卡里有 SQS/CodeBuild 利用链与权限判定）
 阶段2.5: 🔴 阻断点1: SHELL_BOOTSTRAP (拿shell后硬性流程)
-        ├─ 🔴 先写 state.jsonl access 事件（硬门：不写不得提权；router 已自动兜底一条，你补语义）
         ├─ Linux: 6组固定序列 → 产出本地状态报告 → 才允许提权
         └─ Windows: 5组固定序列 → 产出本地状态报告 → 才允许提权
         └─ 🆕 阻断点6: 无条件隧道判断 — ss -tlnp 看本机监听 → 外部端口全封?
@@ -151,73 +172,29 @@ metadata: { domain: meta, tier: T1 }
         └─ 第三问: 系统规则 — sudo精确匹配/cron PATH/AppArmor？
 阶段5: 收尾 → flag → 攻击链 → quirk 入库
         🔴 收尾强制三步（每台打完）:
-        [1] 记忆沉淀: <box>-complete.md 由 <box>-state.jsonl 汇总生成（攻击链 = 按 ts 排序的 access/flag 事件；quirk = note 事件），不另写散文；
-            有 memory MCP 的会话 → 实体+关系补建（先 search_nodes 查重，存在则 add_observations）
-        [2] 技能反哺: 新 quirk/教训补进对应场景卡（场景命名优先）；改完跑 triage 校验
-        [3] 变更复盘: 本次哪条规则"想到了没用/用了不对" → 记入下次收尾检查
-```text
-
-## 🔴 key-state 规范（产物契约 — 进度不再写自由文本笔记）
-
-> 🔴 **所有关键事实写入 append-only 的 `<box>-state.jsonl`（工作区根目录，一行一事件）。这是判定层（flag/cred 捕获对抗复核）、断点续跑、收尾复盘的唯一事实来源。**
-
-### 文件与 schema
-
-```json
-{"ts":"ISO8601","type":"flag|cred|access|artifact|deadend|note","who":"<user>@<host>","what":"<一句话事实>","evidence":"<能重新产出该事实的确切命令>"}
+        [1] KG 完整性: search_nodes("<靶机名>") → 实体+关系已建? 没有 → 补建
+            （软件/CVE 实体先 search_nodes 查重，存在则 add_observations/relations，不重复建）
+        [2] 规则审计计数: 打完计数器 +1（记录在靶机记忆）→ 满 5 台触发:
+            铁律 ≤15 条? → 超了合并/删除
+            近 3 次会话未触发的规则 → 降级到 memory
+            skill 索引是否还准（新增/过时 skill）?
+        [3] 变更检测复盘: 本次哪条规则"想到了没用/用了不对" → 记入下次收尾检查
 ```
 
-| type | 什么时候写 | what 示例 | evidence 示例 |
-|------|-----------|----------|--------------|
-| `access` | 拿到 shell/会话 | Shell via flask SSTI (www-data@web01) | 建立会话的确切命令 |
-| `cred` | 拿到密码/hash/TGT/密钥 | postgres:postgres@web01 | `cat /var/www/app/.env` |
-| `flag` | 捕获 user/root flag | flag 值原文 | `cat /root/root.txt` |
-| `artifact` | 下载/发现关键文件 | 文件路径 + 用途 | 来源命令（scp/curl 等） |
-| `deadend` | 确认一条死路 | 路径 + 为何排除 | 判定命令（AES256 不可爆破 → hashcat 失败） |
-| `note` | quirk/配置变化/关键版本 | 一句话 | 观测命令 |
+## 🔗 按需加载的专项 Skill
 
-示例:
+> 🔴 **不自动加载，按名加载**：有 `skill` 工具 → `skill("<name>")`；有 `skill_search`/`skill_load` → `skill_load("<name>")`；用户手势 → 消息首行 `/<name>`。（`read_skill` 是 RS 时代旧名，本 harness 不存在。）
+> 🔴 **例外 —— 开局就载（非按需）**：`command-safety-red-lines`（见本卡顶部）。
 
-```json
-{"ts":"2026-06-05T10:22:13Z","type":"access","who":"www-data@web01","what":"Shell via flask SSTI","evidence":"curl -k 'https://10.129.1.2/run?x={{7*7}}'"}
-{"ts":"2026-06-05T10:31:02Z","type":"cred","who":"","what":"web01 postgres:postgres","evidence":"cat /var/www/app/.env"}
-{"ts":"2026-06-05T11:02:44Z","type":"flag","who":"root@dc","what":"ff2d090d7bde32f3744068a41f41204f","evidence":"cat /root/root.txt"}
-{"ts":"2026-06-05T11:05:12Z","type":"deadend","who":"","what":"AES256 kerberoast 不可爆破","evidence":"hashcat -m 18200 报密钥长度错误"}
-```
-
-### 写规则（机制层，不靠自觉）
-
-1. **append-only，事实发生后立即写**（落盘即交付）——禁止攒到收尾批量写；kill/崩溃最多丢最后一行，已写行即事实。
-2. **evidence 必须是可重放的命令**——判定层会重跑它验证（execution over claims，不信任叙述）。
-3. flag/cred 拿到就写，先写后判（存疑在 what 里注明「疑似」）。
-4. 写命令（JSON 内不要含单引号）：
-   `printf '%s\n' '{"ts":"...","type":"flag","who":"root@dc","what":"...","evidence":"..."}' >> <box>-state.jsonl`
-
-### 消费关系
-
-- 阶段5 收尾：`<box>-complete.md` 由 state.jsonl **汇总生成**（攻击链 = 按 ts 排序的 access/flag 事件；quirk = note 事件）。
-- 阶段0 续跑：读 state.jsonl 判断进度（access 事件数 = 已立足主机数；flag 事件 = 已捕获目标）。
-- 判定层/复盘：直接消费 state.jsonl，不读聊天记录；flag/cred 捕获判定流程见 capture-verdict 卡（router 在 flag 读取命令出现时自动注入）。
-
----
-
-## 🔗 按需加载的专项 Skill（🔴 答案就在卡里：场景命中 → 先加载再动手）
-
-> 🔴 **场景命中时必须先加载对应卡再执行，禁止凭记忆硬打。**
-> 卡里含靶机实测的绕过技巧与命令（凭记忆会重踩已沉淀的坑，Nimbus 教训：SSRF 十进制 IP 绕过、CodeBuild 镜像 quirk 等都在卡里，手搓浪费数小时）。
-
-| 场景 | 先加载 | 卡里已有的答案（示例） |
+| 场景 | Skill | 关键内容 |
 |------|-------|---------|
-| Web 端口 | `web-attacks` | 技术栈→攻击映射、OWASP 2025 新趋势 |
-| **URL 抓取/导入/回调/图片代理** | `ssrf-protocol-matrix` | **IMDS 十进制 IP（2852039166）、?x.yaml 后缀绕过** |
-| 端口不在查表 | `unknown-service-probe` | 三步探测 SOP、二进制协议 magic bytes |
-| **IMDS/AWS/云资源线索** | `aws-attack-surface` | 云攻击面清单、IAM 权限链、SQS/CodeBuild 利用 |
-| 非 Web 服务 | `service-attacks` | 41 端口 枚举→利用→验证 |
-| Linux shell | `linux-privesc` | 8 阶段检查表、2026 通杀 CVE |
-| Windows shell | `windows-privesc` | 特权令牌→服务→内核 CVE 全链 |
-| AD 域 | `ad-checklist` + `ad-type-recognition` | 题型决策树、攻击路径优先级 |
-| 凭据到手 | `password-attacks` + `credential-spraying-password-reuse` | hashcat 模式选择、先喷后判 |
-| 容器/Pod | `container-escape` | 决策树、K8s SA token→RBAC |
-| 同路径失败 ≥2 | `debug-5whys` | 假设审计→二分验证 |
-| 卡壳/需要具体技术 | `htb-skill-index` | 全卡名反查表 |
-| 记忆无匹配 | `no-hint-solving` | A→E 自主发现五阶段 |
+| 🔴 开局 | `command-safety-red-lines` | 操作安全红线：自伤型命令 + 破坏性操作可逆性 |
+| Web 端口 | `web-attacks` | 先读顶部索引定位技术栈 |
+| 非 Web 服务 | `service-attacks` | 先读顶部索引定位端口 |
+| Linux shell | `linux-privesc` | 先读顶部索引匹配内核版本 |
+| Windows shell | `windows-privesc` + `ad-checklist` | 先 SharpHound |
+| 凭据到手 | `password-attacks` + `lateral-movement` | hashcat 模式选择 |
+| 容器/Pod | `container-escape` | privileged/capabilities 检查 |
+| AD 域 | `ad-checklist` | 攻击路径优先级 |
+| 同一路径失败 ≥3 | `debug-5whys` | 假设审计→二分验证 |
+| KG 无匹配 | `no-hint-solving` | A→E 自主发现五阶段 |

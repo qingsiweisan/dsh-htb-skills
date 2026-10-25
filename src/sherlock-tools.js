@@ -10,8 +10,10 @@
  *   htb_sherlock_progress   owned / 进度 / rank
  *
  * 认证: token 读取顺序 = config.tokenPath > $HTB_TOKEN > ~/.dsh/htb-token.txt
- *   (3 天 JWT; 过期后用浏览器 localStorage htb-token 刷新落盘,零转写:
- *    页面上下文 data:URL 下载 htb-token.txt → 移到 ~/.dsh/htb-token.txt)
+ *   (3 天 JWT。刷新走 `scripts/htb-token-refresh.mjs` —— 复用 Playwright MCP 的持久化
+ *    profile 读 localStorage['htb-token'] 落盘；已挂计划任务 HTB-Token-Refresh 每日检查。
+ *    🔴 脚本装在**本插件包内**、不在工作区里，所以提示一律给绝对路径：
+ *      见 {@link tokenRefreshScript}。手动: `node "<绝对路径>" [--check|--force]`）
  *
  * 端点(BASE = https://labs.hackthebox.com, Bearer 认证):
  *   GET  /api/v4/sherlocks/{slug}              -> {data:{id,...}}
@@ -31,9 +33,24 @@ import { readFileSync, writeFileSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { homedir } from 'node:os'
 import { execFileSync } from 'node:child_process'
+import { fileURLToPath } from 'node:url'
 
 const BASE = 'https://labs.hackthebox.com'
 const DEFAULT_PASSWORD = 'hacktheblue'
+
+/**
+ * token 刷新脚本的**绝对路径**（从本模块位置推导，装到哪都对）。
+ *
+ * 🔴 2026-09-27 实测教训：原先错误信息里写的是相对路径 `scripts/htb-token-refresh.mjs`，
+ * 而插件装在 **工作区之外**（`C:\Users\<user>\dsh-htb-skills\`）——
+ * agent 从工作区 cwd 解析不到，连续 3 次 glob（`scripts/*.mjs`、递归找
+ * `sherlock.mjs`、递归找 `htb-token-refresh.mjs`）全部返回 No files found，
+ * 只好手工驱动 Playwright 抓 localStorage，还留下 3 个野 token 文件。
+ * 提示里给路径必须给**能被直接执行**的绝对路径。
+ */
+export function tokenRefreshScript() {
+  return fileURLToPath(new URL('../scripts/htb-token-refresh.mjs', import.meta.url))
+}
 
 function tokenPath(config) {
   if (typeof config?.tokenPath === 'string' && config.tokenPath) return config.tokenPath
@@ -51,7 +68,9 @@ function resolveToken(config) {
     /* fall through to error */
   }
   throw new Error(
-    `HTB token 未找到。请用浏览器 localStorage htb-token 刷新 ${file} (零转写: data:URL 下载 htb-token.txt 后移入),`
+    `HTB token 未找到 (${file})。`
+    + `刷新: node "${tokenRefreshScript()}" --force`
+    + '  (复用浏览器登录态; 新机器首次加 --headed 登录一次),'
     + ' 或传 config.token / 设 $HTB_TOKEN。'
   )
 }
@@ -70,7 +89,12 @@ async function apiJson(pathname, token, opts = {}) {
   let json
   try { json = JSON.parse(text) } catch { json = { _raw: text } }
   if (res.status === 401) {
-    throw new Error(`401 未认证: htb-token 过期或无效。重新登录 HTB 后刷新 ${tokenPath()}`)
+    throw new Error(
+      `401 未认证: htb-token 过期或无效。`
+      + `刷新: node "${tokenRefreshScript()}" --force`
+      + `  (目标文件 ${tokenPath()}; 若登录态也失效则加 --headed 重新登录)`
+      + `  只查状态不开浏览器: node "${tokenRefreshScript()}" --check`
+    )
   }
   return { status: res.status, json }
 }

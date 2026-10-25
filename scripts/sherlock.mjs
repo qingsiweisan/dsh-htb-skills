@@ -11,9 +11,9 @@
 //   GET  /api/v4/sherlocks/{id}/progress       -> {data:{is_owned,progress,tasks_answered,own_rank}}
 //
 // 认证: --token 参数 > $HTB_TOKEN 环境变量 > ~/.dsh/htb-token.txt > ./htb-token.txt
-//   token 是 3 天 JWT。从浏览器拿并落盘(不转写):
-//     页面上下文 fetch 里 `localStorage.getItem('htb-token')` 得到一个字符串后,
-//     用 data: URL 下载成文件: 见 skills/sherlock-investigation/SKILL.md §0。
+//   token 是 3 天 JWT。刷新走 htb-token-refresh.mjs(复用浏览器持久化 profile 读
+//   localStorage['htb-token'] 落盘; 已挂计划任务 HTB-Token-Refresh 每日检查):
+//     node scripts/htb-token-refresh.mjs [--check|--force]
 //
 // zip 密码: HTB Sherlock 默认 'hacktheblue'(可用 --password 覆盖)。
 //
@@ -75,7 +75,7 @@ async function apiJson(pathname, token, opts = {}) {
   let json;
   try { json = JSON.parse(text); } catch { json = { _raw: text }; }
   if (res.status === 401) {
-    console.error('401 未认证: token 过期或无效。重新登录 HTB, 用浏览器 localStorage htb-token 刷新 ~/.dsh/htb-token.txt');
+    console.error('401 未认证: token 过期或无效。刷新: node scripts/htb-token-refresh.mjs --force');
     process.exit(2);
   }
   return { status: res.status, json };

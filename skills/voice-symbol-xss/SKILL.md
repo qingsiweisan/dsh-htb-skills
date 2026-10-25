@@ -1,10 +1,9 @@
 ---
 name: 'voice-symbol-xss'
-description: 'XSS via voice-to-text symbol mapping：语音词''open bracket'' → `<`。来源 Makesense whisper-wrapper.js。'
-disable-model-invocation: true
+description: 'XSS via voice-to-text symbol mapping：语音词"open bracket" → `<`。来源 Makesense whisper-wrapper.js。（检索词：voice symbol xss）'
 metadata: { domain: web, tier: T3 }
 ---
-
+> 📌 DSH 适配：本技能移植自 RS。原 read_skill/run_skill 调用 = 用 DSH 的 skill 工具按名加载对应技能；fleet/kali-mcp = 用 bash 后台任务与 subagent 工具实现。
 
 ## XSS via Voice/Text Symbol Mapping
 
@@ -24,7 +23,7 @@ const mappings = {
     'dot': '.',
     // ... 等 20+ 个符号映射
 };
-```text
+```
 
 用户对着麦克风说："open bracket script close bracket alert open parenthesis quote XSS quote close parenthesis semi colon open bracket slash script close bracket"
 
@@ -61,7 +60,7 @@ iv = os.urandom(12)
 ciphertext = aesgcm.encrypt(iv, plaintext, None)
 encrypted = base64.b64encode(iv + ciphertext).decode()
 # POST to save_voice_results endpoint
-```text
+```
 
 ### 相关：AES-GCM 密钥提取
 

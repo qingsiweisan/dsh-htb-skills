@@ -1,65 +1,118 @@
 # dsh-htb-skills
 
-HTB（Hack The Box）打靶技能库，封装为 DeepSeek Harness 插件。
+HTB（Hack The Box）打靶框架，封装为 [DeepSeek Harness](https://github.com/deepseek-ai) 插件。
 
-这是一个社区项目，并非 DeepSeek 官方插件，也不代表 DeepSeek 的认可或背书。
+> 社区项目，**并非** DeepSeek 官方插件，也不代表 DeepSeek 的认可或背书。
+> 仅用于**授权环境**（HTB 靶机、自建实验环境）的攻防练习。见 [SECURITY.md](SECURITY.md)。
 
 ## 是什么
 
-- **114 张技能卡**：从 Reasonix Studio 的 HTB 技能库移植，覆盖 Web / AD-Windows / Linux / 数据库 / 云 / 取证等 10 个领域；
-- **插件形态**：包内自带 `skills/` 树，通过官方 `@deepseek-ai/dsh-skill-filesystem` 的 provider 机制注册为名为 `htb` 的技能提供者——技能随包版本化、git 管理，编辑即时热重载，不写任何文件进 `~/.dsh/skills`；
-- **三层结构**：T1 路由卡进会话目录；T2 深度卡 / T3 参考卡带 `disable-model-invocation: true` 隐藏，按名精确加载；`htb-skill-index` 是全部卡名的领域×层级总索引。
+一个"技能库 + 状态账本 + 路由 + 守卫"的组合，目标不是让模型知道更多，
+而是让它在**正确的时刻**想起该想起的东西、**该停的时候**停得下来。
 
-## 安装
+三个组件：
 
-```powershell
-# 1. 克隆本仓库
-git clone https://github.com/qingsiweisan/dsh-htb-skills.git
+| 组件 | 目录 | 作用 |
+|---|---|---|
+| **技能库 + 守卫** | 根目录（`src/` `skills/` `scripts/`） | 164 张技术卡 + 5 个观测/守卫模块 + 9 个 `htb_*` 工具 + 30 道自检闸 |
+| **路由** | `router/` | 93 条规则：从工具调用推断攻击阶段，按需注入对应卡片（不是全量灌） |
+| **预设** | `preset/` | persona 与插件装配（把上面两者接到一个会话里） |
 
-# 2. 安装到 DSH profile（link 安装，本地改代码即时生效）
-dsh plugin --profile web add link:./dsh-htb-skills
-#   或从 npm 安装：
-#   dsh plugin --profile web add dsh-htb-skills
+## 六层结构
 
-# 3. 重启 dsh web，新建会话即可看到 htb-skill-index 等 T1 卡
+按"离模型思维的距离"排，越靠后越可靠：
+
+```
+L1 输入   它看到什么   router 按阶段注入卡片 / htb_brief 传假设给子 agent
+L2 动作   它能做什么   4 道守卫（红线 / 提问 / WP / 停止协议）+ dead 必须带对照证据
+L3 反馈   做完看到什么 单次输出超标 + 上下文累积 + 失败归因 6 类 + 战线预算
+L4 时间   什么时候停   stall 90 分钟 / budget 6 小时 → 注入提醒 + 上闸
+L5 结构   什么离开脑子  state.jsonl（fact / intent / auto-probe）+ loot 台账
+L6 采样   换起点       未实现（见 docs/ARCHITECTURE.md 的"未做"清单）
 ```
 
-Linux / Kali 同理，路径换成克隆目录即可。
-
-> 注意：插件挂载后，`~/.dsh/skills` 里的同名散装技能会与插件里的卡**重复**（同名时 preset 层会遮蔽全局层）。迁移时先备份再清空散装目录：
->
-> ```sh
-> mv ~/.dsh/skills ~/.dsh/skills.bak   # 确认插件生效后再删除
-> ```
+设计原则与取舍写在 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)；卡片写作规范见 [`docs/CARD-NORMS.md`](docs/CARD-NORMS.md)。
 
 ## 目录结构
 
 ```
 dsh-htb-skills/
-├── package.json          # dsh.bundle.patch 指向 cordis.patch.yml
-├── cordis.patch.yml      # 注入 host 插件行：- id: htb-skills
-├── src/index.js          # 插件本体：注册 htb skill provider（无浏览器半区）
-├── skills/               # 114 张技能卡（SKILL.md + frontmatter）
-│   ├── htb-skill-index/  #   总索引（T1，进目录）
-│   ├── box-startup/      #   T1 路由卡示例（含 key-state 产物规范）
-│   └── ...               #   T2/T3 卡带 disable-model-invocation: true
-├── docs/
-│   ├── CARD-NORMS.md     # 卡片写作规范（可解析工件/漏洞形状/语义 rubric/子代理隔离）
-│   └── ARCHITECTURE.md   # 架构与变异点地图（机制域 vs 内容域，改框架先读它）
-└── scripts/
-    ├── triage_skills.py  # 分层/修 whenToUse/修坏链/重生成索引卡（末尾自动跑路由审计）
-    ├── fix_yaml.py       # 全量 YAML 引号规范 + PyYAML 校验（幂等：解码后重转义）
-    ├── audit_routing.py  # 路由完整性审计（只读）：名字唯一性/MAPPING 双向一致/
-    │                     #   tier 与 disable-model-invocation 一致/索引卡新鲜度/跨卡引用可解析
-    └── verify_run.py     # 判定层：flag/cred 捕获事件的确定性复核（读磁盘 transcript）
+├── package.json              # dsh.bundle.patch → cordis.patch.yml
+├── cordis.patch.yml          # 注入 host 插件行
+├── src/
+│   ├── index.js              # 插件入口（注册 provider / 工具 / 守卫）
+│   ├── sherlock-tools.js     # 6 个 htb_sherlock_* 工具
+│   ├── state-tools.js        # htb_fact / htb_frontier / htb_brief（状态账本）
+│   ├── guard.js              # 红线守卫（18 条）
+│   ├── ask-guard.js          # 提问守卫（不把解题责任推回用户）
+│   ├── wp-guard.js           # WP 守卫（打靶会话不读官方 writeup）
+│   ├── struggle.js           # 停滞/重复/预算的判定
+│   ├── struggle-watch.js     # 判定接线 + 停止协议闸
+│   ├── scope-observe.js      # 出站目标观测（只记录，永不拦截）
+│   ├── context-hygiene.js    # 上下文卫生（单次 + 累积）
+│   ├── error-classify.js     # 失败归因（6 类 + 同类合并）
+│   └── auto-state.js         # 战线推断 + 切换摘要 + 战线预算
+├── skills/                   # 164 张技能卡（T1 路由 / T2 深度 / T3 参考）
+│   └── htb-skill-index/      #   领域 × 层级总索引
+├── scripts/                  # 30 道自检闸（25 个 node 用例 + python 审计）
+├── templates/                # 并行侦察 workflow / 通道适配器
+├── docs/                     # 架构与卡片规范
+├── router/                   # 路由插件（规则表 + 匹配逻辑）
+└── preset/                   # persona 与装配
 ```
 
-### 卡片的 frontmatter 约定
+## 安装
+
+```sh
+git clone https://github.com/qingsiweisan/dsh-htb-skills.git
+cd dsh-htb-skills
+```
+
+**1) 技能库 + 守卫**（link 安装，本地改代码即时生效）
+
+```sh
+dsh plugin --profile web add link:./dsh-htb-skills
+```
+
+**2) 路由**（可选，但强烈建议——没有它，卡片只在被想起时才生效）
+
+```sh
+dsh plugin --profile web add link:./dsh-htb-skills/router
+```
+
+**3) 预设**：把 `preset/cordis.patch.yml` 里的 persona 段落合并进你的 profile 配置。
+其中 `C:\Users\<user>\...` 是占位符，按你的实际路径替换。
+
+```sh
+dsh web   # 重启后新建会话，看到 htb-skill-index 等 T1 卡即为生效
+```
+
+> 注意：插件挂载后，`~/.dsh/skills` 里的同名散装技能会与插件里的卡**重复**
+> （同名时 preset 层遮蔽全局层）。迁移前先备份：
+>
+> ```sh
+> mv ~/.dsh/skills ~/.dsh/skills.bak
+> ```
+
+## 自检
+
+```sh
+node scripts/framework-check.mjs          # 30 道闸，绿了才算没改坏
+node scripts/router-rules-test.mjs        # 只跑路由规则表
+python scripts/triage_skills.py           # 重生成索引卡（需 pyyaml）
+python scripts/audit_routing.py           # 路由完整性审计（只读）
+```
+
+改完卡片或规则**必须**跑 `framework-check.mjs`。它覆盖：卡片元数据一致性、
+路由引用可解析、守卫接线、状态账本、上下文卫生、失败归因、战线推断、
+以及"文档数字与实际一致"（防止 README 说 164 张卡而实际 163 张）。
+
+## 卡片的 frontmatter 约定
 
 ```yaml
 ---
 name: web-attacks
-description: 'Web 攻击综合手册：OWASP 2025 映射→…'
+description: 'Web 攻击综合手册：OWASP 映射 → …（检索词：…）'
 whenToUse: '目标有 HTTP/HTTPS 攻击面时：…'
 # T2/T3 卡额外带这一行；T1 卡不写：
 disable-model-invocation: true
@@ -67,42 +120,18 @@ metadata: { domain: web, tier: T1 }
 ---
 ```
 
-- `domain` 取值：`meta / web / ad-win / linux / db / cloud / creds / forensics / network / tools`
-- `tier` 取值：`T1`（进目录）/ `T2`（深度，按名加载）/ `T3`（参考与题源，按名加载）
+- `domain`：`meta / web / ad-win / linux / db / cloud / creds / forensics / network / tools`
+- `tier`：`T1`（进会话目录）/ `T2`（深度，按名加载）/ `T3`（参考与题源，按名加载）
 
-## 维护
-
-改完技能后跑一遍校验链（需 `pip install pyyaml`；三个脚本都幂等，可重复跑）：
-
-```sh
-python scripts/fix_yaml.py        # 规范引号 + 校验全部 frontmatter
-python scripts/triage_skills.py   # 分层元数据 + 重生成索引卡（末尾自动跑路由审计）
-python scripts/audit_routing.py   # 路由审计：引用解析/索引一致性（任一错误退出码 1）
-```
-
-audit_routing.py 检查的路由面：卡名合法且唯一、目录名与卡名一致（警告）、`MAPPING` 与磁盘双向覆盖（索引不会挂空、不会漏卡）、`metadata.tier` 与 `disable-model-invocation` 一致、索引卡与 `MAPPING` 生成内容逐字节一致（STALE-INDEX）、卡内 backtick/[[wiki]]/中文路由关键词（加载/详见/见/查…）引用的名字全部可解析（DANGLING-REF），以及引号翻倍回归守卫（QUOTE-RUN-CORRUPTION）。
-
-新增一张卡 = 在 `skills/` 下建目录 + 写 SKILL.md + 在 `scripts/triage_skills.py` 的 `MAPPING` 里登记 domain/tier，重跑校验链。插件 `watch` 默认开启，编辑后无需重启。
-
-## 发布到 GitHub / npm
-
-```sh
-git init
-git add .
-git commit -m "dsh-htb-skills: initial HTB skill library plugin"
-gh repo create dsh-htb-skills --public --source=. --push   # 或手动 git remote add + push
-```
-
-- 建议给仓库加 [dsh-plugin](https://github.com/topics/dsh-plugin) topic 方便被发现（官方生态指引）；
-- 发布 npm：`npm publish`，之后两台机器都可以 `dsh plugin --profile <name> add dsh-htb-skills` 安装；
-- 升级 = `git pull`（link 安装）或 `dsh plugin --profile <name> update dsh-htb-skills`（npm 安装）。
+新增一张卡 = 建目录 + 写 `SKILL.md` + 在 `scripts/triage_skills.py` 的 `MAPPING` 登记
+`domain/tier` + 重跑校验链。`slug` 的每个分词都必须出现在元数据里（否则路由搜不到）。
 
 ## 兼容范围
 
-- DeepSeek Harness `0.1.0-rc.x`（与 `@deepseek-ai/dsh-skill-filesystem ^0.1.0-rc.6` 对齐）；
-- Node `^22.19.0 || >=24.0.0`；
-- Harness 仍处于开发者预览期，升级后如有破坏性变更请对照上游 `skill-filesystem` 的导出再使用。
+- DeepSeek Harness `0.1.0-rc.x`（对齐 `@deepseek-ai/dsh-skill-filesystem ^0.1.0-rc.6`）
+- Node `^22.19.0 || >=24.0.0`
+- Harness 仍在开发者预览期，升级后如有破坏性变更，请对照上游 `skill-filesystem` 的导出
 
 ## 许可证
 
-MIT。技能卡内容移植自 Reasonix Studio 的个人技能库。
+MIT。技能卡内容整理自个人实战与公开资料；不含任何真实环境凭据（见 [SECURITY.md](SECURITY.md)）。

