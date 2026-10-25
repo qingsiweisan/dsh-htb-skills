@@ -25,16 +25,22 @@ agent.inject(卡正文) → 模型下一步决策时知识已在上下文中
 
 ## 安装(Kali DSH)
 
+本插件**随主仓库一起发布**，位于 `dsh-htb-skills/router/`，不需要单独 clone：
+
 ```bash
-cd /root && git clone https://github.com/qingsiweisan/dsh-htb-router.git
-cd /root/dsh-htb-router && pnpm install
-dsh plugin --profile web add link:/root/dsh-htb-router
+git clone https://github.com/qingsiweisan/dsh-htb-skills.git
+cd dsh-htb-skills
+dsh plugin --profile web add link:./dsh-htb-skills          # 技能库 + 守卫
+dsh plugin --profile web add link:./dsh-htb-skills/router   # 本插件
 # 重启 dsh web 进程生效
 ```
+
+> 早期版本把 router 作为独立仓库 `~/dsh-htb-router` 安装；`htb_brief` 读规则表时
+> 会**先找包内 `router/`，再退回 `~/dsh-htb-router`**，两种布局都能用。
 
 规则表与阈值在 `cordis.patch.yml` 的 row config 里,改完重启生效。
 
 ## 与 dsh-htb-skills 的分工
 
-- `dsh-htb-skills`:113 张技术卡(答案库)
-- `dsh-htb-router`:确定性路由(在正确的时刻把正确的卡投递给模型)
+- `dsh-htb-skills`(根目录):164 张技术卡 + 5 个观测/守卫模块 + 9 个 `htb_*` 工具
+- `dsh-htb-skills/router`(本目录):确定性路由 —— 在正确的时刻把正确的卡投递给模型

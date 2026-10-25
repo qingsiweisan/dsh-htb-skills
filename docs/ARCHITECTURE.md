@@ -1,15 +1,20 @@
 # 架构与变异点地图(ARCHITECTURE)
 
 > 本文档回答一个问题:**想改框架时,该碰哪里、不该碰哪里。**
+> 想知道"每层是什么、改了什么要重启、怎么验证"→ 先读 [FRAMEWORK.md](FRAMEWORK.md)。
 > 移植自 Anthropic defending-code-reference-harness 的 docs/customizing.md —— "Where the C/C++ specifics live, concretely":把系统切成**通用机制域**(换个领域不变)与**内容域**(随靶机/技术演进),并用契约文件把两域解耦。
 
 ## 1. 两域总览
 
 ```
 ┌────────────────────────── 通用机制域(plumbing,不随内容变) ──────────────────────────┐
-│  dsh-htb-router/src/index.js     事件驱动注入引擎(匹配→加载卡正文→agent.inject)      │
+│  router/src/index.js             事件驱动注入引擎(匹配→加载卡正文→agent.inject)      │
 │    └─ 编排器写账本               规则命中 shell 建立信号时由插件直接 append state     │
 │                                  access 事件(去重+每类上限)——模型零参与               │
+│  src/context-hygiene.js          上下文卫生:单次超标 + 累积超标(滑动窗口)             │
+│  src/error-classify.js           失败归 6 类 + 同类合并(按类限流)                      │
+│  src/auto-state.js               战线推断(滞后) + 切换摘要 + 战线预算                  │
+│  src/struggle-watch.js           停滞判定 + 停止协议(通知 + 闸)                        │
 │  scripts/audit_routing.py        引用/层级/白名单静态审计                              │
 │  scripts/triage_skills.py        MAPPING→索引生成+结构校验                             │
 │  scripts/verify_run.py           判定层:flag/cred 捕获的确定性复核                     │
@@ -18,8 +23,8 @@
 └─────────────────────────────────────────────────────────────────────────────────────┘
         ▲ 消费规则表/卡片正文                  ▲ 校验 MAPPING/卡片                     
 ┌────────┴──────────────────────── 内容域(domain content,随靶机/技术演进) ──────────────┐
-│  skills/*/SKILL.md              114 张卡:知识本体(T1 目录可见/T2/T3 按名加载)          │
-│  dsh-htb-router/cordis.patch.yml  rules 规则表(85 条:场景正则→卡名,是内容不是代码)    │
+│  skills/*/SKILL.md              164 张卡:知识本体(T1 目录可见/T2/T3 按名加载)          │
+│  router/cordis.patch.yml          rules 规则表(93 条:场景正则→卡名,是内容不是代码)    │
 │  scripts/triage_skills.py MAPPING 卡名→(domain,tier) 映射                              │
 │  scripts/audit_routing.py WHITELIST 正文合法 token 名单(随卡演进)                      │
 └─────────────────────────────────────────────────────────────────────────────────────┘
@@ -32,7 +37,7 @@
 | 想做什么 | 改哪里 | 不碰哪里 |
 |---|---|---|
 | 沉淀一台新靶机的知识/新 quirk | 新建/更新 `skills/<name>/SKILL.md` + MAPPING 一行 + triage 生成索引 | router 引擎、审计脚本逻辑 |
-| 让某场景自动注入某卡 | `dsh-htb-router/cordis.patch.yml` 加一条 rule(pattern 用单引号字面量正则) | src/index.js |
+| 让某场景自动注入某卡 | `router/cordis.patch.yml` 加一条 rule(pattern 用单引号字面量正则) | src/index.js |
 | 新增"可判定捕获"的类型(如 证据文件 artifact 判定) | `capture-verdict` 卡步骤 + `verify_run.py` 加一个检查函数 | state.jsonl 事件型语义不变更时其它不动 |
 | 让某场景自动写账本事件 | `cordis.patch.yml` 该规则加 `state: {type, what}` 字段 | src/index.js(机制已内置) |
 | 让某场景注入硬门提醒(不带卡) | `cordis.patch.yml` 该规则加 `note: |` 字段,cards 留空 | src/index.js |

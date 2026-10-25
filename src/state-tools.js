@@ -8,7 +8,7 @@
  *   我们的 loot/<machine>.md + traces/*.md 正是"纯文本共享记忆"。
  *
  * 与既有机制的接缝（刻意复用，不另起炉灶）：
- *   - 文件：`<stateRoot>/<machine>-state.jsonl` —— **与 dsh-htb-router 的 state 事件同一个文件**。
+ *   - 文件：`<stateRoot>/<machine>-state.jsonl` —— **与 router/ 的 state 事件同一个文件**。
  *     router 命中规则时写 `type:"access"`，本工具写 `type:"fact" | "intent" | "intent-update"`。
  *     两边合起来就是 Intentest 那个"全局黑板"的雏形。
  *   - 证据：fact 的 `evidenceId` 直接指向 dsh-htb-evidence 的账本 id（ev-<12hex>）。
@@ -24,6 +24,7 @@
 import { appendFileSync, existsSync, readFileSync, readdirSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { isAbsolute, join, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 /** fact 节点类型。 */
 const KINDS = ['host', 'service', 'cred', 'vuln', 'flag', 'note']
@@ -253,16 +254,41 @@ export function parseRouterRules(text) {
   return rules
 }
 
+/**
+ * router 规则表的候选路径。
+ *
+ * 🔴 2026-10-25：router 从"独立仓库 `~/dsh-htb-router`"并入本包的 `router/` 子目录，
+ *    所以默认路径必须**先找包内**，再退回旧的独立安装位置 —— 否则从本仓库新装的人
+ *    永远读不到规则表（`loadRouterRules` 会静默返回空规则，brief 降级但不报错）。
+ * @param config - 插件配置（`routerPatchPath` 显式指定时优先）。
+ * @returns 候选路径列表（按优先级）。
+ */
+function routerPatchCandidates(config) {
+  const explicit = typeof config?.routerPatchPath === 'string' ? config.routerPatchPath.trim() : ''
+  if (explicit !== '') return [explicit]
+  const pkgRoot = fileURLToPath(new URL('..', import.meta.url))
+  return [
+    join(pkgRoot, 'router', 'cordis.patch.yml'),
+    join(homedir(), 'dsh-htb-router', 'cordis.patch.yml'),
+  ]
+}
+
 /** 读 router 规则表；失败不抛（brief 要能在规则表缺失时降级可用）。 */
 function loadRouterRules(config) {
-  const raw = typeof config?.routerPatchPath === 'string' && config.routerPatchPath.trim() !== ''
-    ? config.routerPatchPath
-    : join(homedir(), 'dsh-htb-router', 'cordis.patch.yml')
-  const path = isAbsolute(raw) ? raw : resolve(process.cwd(), raw)
-  try {
-    return { path, rules: parseRouterRules(readFileSync(path, 'utf-8')) }
-  } catch (error) {
-    return { path, rules: [], error: error.message }
+  const candidates = routerPatchCandidates(config)
+  let lastPath = candidates[candidates.length - 1]
+  for (const raw of candidates) {
+    const path = isAbsolute(raw) ? raw : resolve(process.cwd(), raw)
+    try {
+      return { path, rules: parseRouterRules(readFileSync(path, 'utf-8')) }
+    } catch {
+      lastPath = path // 继续试下一个候选
+    }
+  }
+  return {
+    path: lastPath,
+    rules: [],
+    error: 'router 规则表不存在（已尝试包内 router/ 与 ~/dsh-htb-router）',
   }
 }
 

@@ -123,7 +123,7 @@ export async function apply(ctx, config) {
     )
   }
   registerSherlockTools(ctx, config)
-  // 作战状态账本（fact 节点 / intent 边）。与 dsh-htb-router 的 state 事件共用
+  // 作战状态账本（fact 节点 / intent 边）。与 router/ 的 state 事件共用
   // <stateRoot>/<machine>-state.jsonl —— 两边合起来是"全局黑板"（见 state-tools.js 头注）。
   registerStateTools(ctx, config)
   if (config.guard !== false) {
