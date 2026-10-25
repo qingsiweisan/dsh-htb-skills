@@ -14,7 +14,7 @@
 #   web-attacks / service-attacks(T1 门面卡,四轮验证模型可靠加载)
 #
 # Activate with:
-#   dsh plugin --profile <name> add link:/path/to/dsh-htb-router
+#   dsh plugin --profile <name> add link:/path/to/dsh-htb-skills/router
 - insert:
     - id: htb-router
       name: 'dsh-htb-router'
