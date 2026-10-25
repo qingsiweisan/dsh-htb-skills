@@ -18,6 +18,14 @@ HTB（Hack The Box）打靶框架，封装为 [DeepSeek Harness](https://github.
 | **路由** | `router/` | 93 条规则：从工具调用推断攻击阶段，按需注入对应卡片（不是全量灌） |
 | **预设** | `preset/` | persona 与插件装配（把上面两者接到一个会话里） |
 
+## 关于卡片里的 `RS`
+
+部分卡片带一行 `📌 DSH 适配：本技能移植自 RS`，以及 `（⚠️ xxx 是 RS 时代工具名）` 的注记。
+
+**RS = Reasonix Studio**，是这批卡片最初成形的环境（作者的上一代工作台）。两者工具名不同，
+所以每张移植过的卡都在头部标了映射关系（例如 `read_skill` / `run_skill` → DSH 的 `skill` 工具）。
+这些注记是**迁移痕迹**，不是外部依赖 —— 本仓库不依赖 RS，也不包含它的代码。
+
 ## 六层结构
 
 按"离模型思维的距离"排，越靠后越可靠：
@@ -135,3 +143,7 @@ metadata: { domain: web, tier: T1 }
 ## 许可证
 
 MIT。技能卡内容整理自个人实战与公开资料；不含任何真实环境凭据（见 [SECURITY.md](SECURITY.md)）。
+
+**关于第三方仓库**：卡片里出现的 `github.com/...` 链接是**工具来源**（告诉你这个工具去哪拿），
+不是本仓库的依赖。本仓库**不包含**这些项目的代码，也没有 vendored 目录；
+运行时只依赖 `@deepseek-ai/dsh-skill-filesystem` 与 `@deepseek-ai/dsh-llm`（Harness 一方组件）。

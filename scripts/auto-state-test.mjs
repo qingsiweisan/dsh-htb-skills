@@ -29,7 +29,7 @@ const check = (label, cond) => {
 const CASES = [
   ['recon', 'nmap -p- --min-rate 2500 10.10.11.5'],
   ['recon', 'ffuf -u https://x/FUZZ -w list.txt'],
-  ['web', 'curl -sk https://airsnacks.htb/browse'],
+  ['web', 'curl -sk https://target.htb/browse'],
   ['web', 'python3 -c "import urllib.request"'],
   ['db', 'psql -h 127.0.0.1 -U app'],
   ['graphical', 'xdpyinfo -display :0'],
