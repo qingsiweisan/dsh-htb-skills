@@ -69,6 +69,22 @@ dsh-htb-skills/
 └── preset/                   # persona 与装配
 ```
 
+## 可选伴随仓库（不在本仓库内）
+
+| 仓库 | 许可 | 作用 | 状态 |
+|---|---|---|---|
+| `dsh-htb-evidence` | **Apache-2.0**（fork 自 [PerryLink/dsh-research-report](https://github.com/PerryLink/dsh-research-report)） | 证据账本：把 `htb_fact` 的 `evidenceId` 绑到可校验的字节快照；另加 `htb_coverage` / `htb_traces` 两个 HTB 专用工具 | 独立发布 |
+| `dsh-htb-tuning` | 私有 | profile 调优：中和与渗透工作冲突的默认权限规则 | 本地专用 |
+
+**主包不依赖它们**：
+
+- 没有 evidence 时，`htb_fact` 仍可写 `inferred` 事实，只是 `verified` 无法做证据校验；
+- `framework-check.mjs` 检测不到 evidence 仓库会**自动跳过**那两道闸（打印 `↷ 跳过`），
+  不影响其余 28 道。
+
+> 为什么 evidence 不并进来：它是 Apache-2.0 的**第三方 fork**，并进 MIT 仓库需要
+> 保留上游 LICENSE / NOTICE 并显式声明改动，属于独立的许可决策，不适合顺手合并。
+
 ## 安装
 
 ```sh
