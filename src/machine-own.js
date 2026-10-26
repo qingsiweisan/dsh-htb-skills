@@ -26,8 +26,8 @@
  */
 
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
-import { homedir } from 'node:os'
 import { isAbsolute, join, resolve } from 'node:path'
+import { describeError, request } from './htb-api.js'
 
 /** Stable Cordis plugin name. */
 export const name = 'htb-machine-own'
@@ -35,29 +35,8 @@ export const name = 'htb-machine-own'
 /** 依赖工具注册表。 */
 export const inject = ['tools']
 
-/** HTB Labs API 根。可被 `config.baseUrl` 覆盖（测试打本地 mock）。 */
-export const DEFAULT_BASE_URL = 'https://labs.hackthebox.com'
-
 /** 提交端点。2026-10-25 实测：v4 全是 404，只有 v5 的这个能用。 */
 export const OWN_PATH = '/api/v5/machine/own'
-
-/** token 文件默认位置（与 sherlock-tools 同口径）。 */
-export function defaultTokenPath() {
-  return join(homedir(), '.dsh', 'htb-token.txt')
-}
-
-function tokenPathOf(config) {
-  if (typeof config?.tokenPath === 'string' && config.tokenPath !== '') return config.tokenPath
-  return defaultTokenPath()
-}
-
-function readToken(config) {
-  const p = tokenPathOf(config)
-  if (!existsSync(p)) return { error: `token 文件不存在: ${p}` }
-  const raw = readFileSync(p, 'utf-8').trim()
-  if (raw === '') return { error: `token 文件为空: ${p}` }
-  return { token: raw.split(/\s+/)[0] }
-}
 
 /** 账本目录（与 state-tools / auto-state 同口径）。 */
 function stateRootOf(config) {
@@ -123,35 +102,14 @@ export function readDeliveryState(config) {
  * @returns `{ ok, status, body }` 或 `{ error }`。
  */
 export async function submitFlag(config, machineId, flag) {
-  const { token, error } = readToken(config)
-  if (error !== undefined) return { error }
-
-  const base = typeof config?.baseUrl === 'string' && config.baseUrl !== ''
-    ? config.baseUrl.replace(/\/+$/, '')
-    : DEFAULT_BASE_URL
   const id = Number(machineId)
   if (!Number.isFinite(id) || id <= 0) return { error: `machine_id 需要正整数，收到 "${machineId}"` }
   if (typeof flag !== 'string' || flag.trim() === '') return { error: 'flag 不能为空' }
 
-  let res
-  try {
-    res = await fetch(base + OWN_PATH, {
-      method: 'POST',
-      headers: {
-        authorization: 'Bearer ' + token,
-        'content-type': 'application/json',
-        accept: 'application/json',
-      },
-      body: JSON.stringify({ id, flag: flag.trim() }),
-    })
-  } catch (err) {
-    return { error: `请求失败: ${err?.message ?? err}` }
-  }
-
-  const text = await res.text()
-  let body
-  try { body = JSON.parse(text) } catch { body = { _raw: text.slice(0, 300) } }
-  return { ok: res.status === 200 && body?.success === true, status: res.status, body }
+  // 请求细节统一在 htb-api（token / baseUrl / 401 话术）。
+  const r = await request(config, 'POST', OWN_PATH, { id, flag: flag.trim() })
+  if (r.error !== undefined) return { error: r.error }
+  return { ok: r.status === 200 && r.json?.success === true, status: r.status, body: r.json }
 }
 
 /**
@@ -212,9 +170,7 @@ export function apply(ctx, config) {
         } catch { /* 记录失败不影响提交结果 */ }
         return `✅ ${msg}（own_type=${r.body?.own_type ?? '?'}，HTTP ${r.status}）`
       }
-      if (r.status === 401) {
-        return `⚠️ 401 未认证：token 过期。刷新: node scripts/htb-token-refresh.mjs --force`
-      }
+      if (r.status === 401) return describeError(401, r.body, '提交 flag')
       return `❌ 提交未通过（HTTP ${r.status}）：${msg}`
     },
   })

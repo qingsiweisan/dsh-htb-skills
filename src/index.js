@@ -31,6 +31,7 @@ import { apply as applyContextHygiene } from './context-hygiene.js'
 import { apply as applyErrorClassify } from './error-classify.js'
 import { apply as applyAutoState } from './auto-state.js'
 import { apply as applyMachineOwn } from './machine-own.js'
+import { apply as applyMachineTools } from './machine-tools.js'
 
 /** Stable Cordis plugin name. */
 export const name = 'htb-skills'
@@ -132,6 +133,16 @@ export async function apply(ctx, config) {
       ...(config.guardTools ? { tools: config.guardTools } : {}),
       ...(config.disabledGuardRules ? { disabledRules: config.disabledGuardRules } : {}),
       ...(config.guardRulesPath !== undefined ? { rulesPath: config.guardRulesPath } : {}),
+    })
+  }
+  // 靶机生命周期工具（2026-10-26）：list / info / spawn / status / stop / reset / user_info。
+  // 依据：三场会话手写 curl 调 HTB API 共 76 次，几乎全在猜端点（paginated 试了 5 种写法、
+  // spawn 后手动轮询 5–10 次、user/info 试了 v4/v5/v6）。封装后一步到位。
+  if (config.machineTools !== false) {
+    applyMachineTools(ctx, {
+      ...(config.machineToolsBaseUrl ? { baseUrl: config.machineToolsBaseUrl } : {}),
+      ...(config.machineToolsTokenPath ? { tokenPath: config.machineToolsTokenPath } : {}),
+      ...(config.machineToolsSpawnTimeoutSec !== undefined ? { spawnTimeoutSec: config.machineToolsSpawnTimeoutSec } : {}),
     })
   }
   // 靶机 flag 提交 + 完成前交付检查（2026-10-26）。

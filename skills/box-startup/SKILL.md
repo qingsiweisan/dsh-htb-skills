@@ -27,6 +27,21 @@ metadata: { domain: meta, tier: T1 }
 🆕 ❌ 模型说"X 有 Y 漏洞"不验证直接执行
 ```
 
+## 🟢 机器就绪检查（用工具，别手写 curl）
+
+```
+htb_machine_status                       → 有 IP 就直接打；没有就 spawn
+htb_machine_spawn { machine: "<名字>" }   → 内部会等到 IP（实测 41–94 秒），不用自己轮询
+htb_machine_info  { machine: "<名字>" }   → 打之前先看 authUserInUserOwns/RootOwns，已 own 就别重复打
+```
+
+**打完**：`htb_machine_stop` 归还配额（不释放会一直占着）。
+**拿到 flag**：立刻 `htb_machine_own { machine_id, flag }` —— 平台的"完成"是 flag **入账**，
+不是文件里读到。Atlas 那场因此静默了 162 分钟。
+
+> 🔴 三场实测：手写 curl 调这些端点共 76 次，几乎全是猜（`machine/paginated` 试了 5 种写法、
+> `user/info` 试了 v4/v5/v6）。有工具就用工具。
+
 ## 🔴 启动时必做 5 件事
 
 > 🔴 **动手前先加载 `command-safety-red-lines`（操作安全红线）** —— 那些坑一次就能造成事故

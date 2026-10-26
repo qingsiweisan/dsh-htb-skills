@@ -34,15 +34,33 @@
 
 ## 2. 模块清单
 
-### 2.1 工具（10 个 `htb_*`）
+### 2.1 工具（17 个 `htb_*`）
 
 | 工具 | 作用 |
 |---|---|
 | `htb_fact` | 事实节点：host / service / cred / vuln / flag / note；`cred·vuln·flag` + `verified` 必须带 evidenceId |
-| `htb_frontier` | 意图边：`add / claim / done / dead`；`dead` 必须带 `baselineEvidenceId`；支持 `assume / ifWrong / budget / reasonCode` |
-| `htb_brief` | 把主 agent 的假设与退路写成子 agent 的任务书 |
-| `htb_machine_own` | 提交靶机 flag 到平台（user / root 同一端点 `POST /api/v5/machine/own`）；成功后写 `flag-own` 记录供交付检查识别 |
-| `htb_sherlock_*`（6 个） | HTB Labs API：info / tasks / download / submit / submit-file / progress |
+| `htb_frontier` | 意图边：`add / claim / done / dead`；`dead` 带 `baselineEvidenceId` 则校验存在性，不带则必须给 `reasonCode`（记为"未对照·可重试"）；支持 `assume / ifWrong / budget` |
+| `htb_brief` | 把主 agent 的假设、退路与**已知死路**写成子 agent 的任务书 |
+| **靶机生命周期**（6 个） | |
+| `htb_machine_list` | 列可打的机器（**只含 active**；retired 用 `htb_machine_info` 按名字查） |
+| `htb_machine_info` | 单台详情（名字或 id，**含 retired**）：OS / 难度 / IP / 是否已 own / 剩余时间 |
+| `htb_machine_spawn` | 启动并**等到 IP**（内部轮询，实测 41–94 秒）—— 一步替代"spawn + 手动轮询十几次" |
+| `htb_machine_status` | 当前活跃机器：IP / 剩余时间 / VPN 服务器 |
+| `htb_machine_stop` | 释放机器（归还配额）；端点不接受 id，按当前活跃实例操作 |
+| `htb_machine_reset` | 重置到初始态（有冷却，429 会给提示） |
+| **交付**（1 个） | |
+| `htb_machine_own` | 提交靶机 flag（user / root 同一端点 `POST /api/v5/machine/own`）；成功后写 `flag-own` 记录供交付检查识别 |
+| **账号**（1 个） | |
+| `htb_user_info` | 排名 / 订阅 / VPN 服务器（**刻意不返回 email**） |
+| **Sherlock**（6 个） | |
+| `htb_sherlock_*` | info / tasks / download / submit / submit-file / progress |
+
+> 所有 HTB API 访问共用一个访问层 `src/htb-api.js`：token 读取、baseUrl、请求封装、
+> 401/429/404/422 的可执行提示。此前 token 逻辑重复了三份，新增工具会变成第四份。
+
+> **两个实测的 API 事实**（不是猜的）：
+> ① `machine/paginated` 的 `state` / `retired` / `filter[...]` 参数**被静默忽略**，它只返回 active 机器；
+> ② `vm/spawn` 的响应**不含 IP**，必须轮询 `machine/active` 直到 `info.ip` 非空。
 
 ### 2.2 守卫（5 道，`tools.guard`）
 
