@@ -43,9 +43,19 @@ export const DEFAULT_SPAWN_TIMEOUT_SEC = 180
 /** 轮询间隔（毫秒）。3 秒 ≈ 实测最优：再密会被限流，再疏会白等。 */
 export const SPAWN_POLL_MS = 3000
 
-/** 纯文本输出（与 sherlock-tools 同形态）。 */
+/**
+ * 纯文本输出。
+ *
+ * 🔴 签名必须是 `render(args, value)`，且**返回 content block 数组** ——
+ * 不是直接返回字符串。2026-10-26 实测：写成 `render: (s) => s` 时，
+ * 框架拿到 `result.content = "<字符串>"`，随后 `result.content.some(...)`
+ * 抛 `content.some is not a function`，**8 个工具全部不可用**，
+ * 而错误文本被当作正常输出返回（`isError` 为空），模型只能改回手写 curl。
+ *
+ * 正确形态见 sherlock-tools / state-tools 的同名函数。
+ */
 function strOutput() {
-  return { schema: { type: 'string' }, render: (s) => s }
+  return { schema: { type: 'string' }, render(_args, value) { return [{ type: 'text', text: String(value) }] } }
 }
 
 /** 简易参数表构造（与 sherlock-tools 的 paramsSpec 同风格）。 */

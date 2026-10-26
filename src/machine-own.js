@@ -146,7 +146,8 @@ export function apply(ctx, config) {
       },
       required: ['machine_id', 'flag'],
     },
-    output: { schema: { type: 'string' }, render: (s) => s },
+    // 🔴 render(args, value) 必须返回 content block 数组，理由见 machine-tools.js 的 strOutput。
+    output: { schema: { type: 'string' }, render(_args, value) { return [{ type: 'text', text: String(value) }] } },
     async execute(args) {
       const r = await submitFlag(cfg, args.machine_id, args.flag)
       if (r.error !== undefined) return `⚠️ 提交失败：${r.error}`
