@@ -39,7 +39,10 @@ L5 结构   什么离开脑子  state.jsonl（fact / intent / auto-probe）+ loo
 L6 采样   换起点       未实现（见 docs/ARCHITECTURE.md 的"未做"清单）
 ```
 
-分层、装配、生效条件与已知欠账见 [`docs/FRAMEWORK.md`](docs/FRAMEWORK.md)；改代码前读 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)（变异点地图）；卡片写作规范见 [`docs/CARD-NORMS.md`](docs/CARD-NORMS.md)。
+17 个工具的用途 / 输入输出 / 调用方式见 [`docs/TOOLS.md`](docs/TOOLS.md)；
+分层、装配、生效条件与已知欠账见 [`docs/FRAMEWORK.md`](docs/FRAMEWORK.md)；
+改代码前读 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)（变异点地图）；
+卡片写作规范见 [`docs/CARD-NORMS.md`](docs/CARD-NORMS.md)。
 
 ## 目录结构
 
