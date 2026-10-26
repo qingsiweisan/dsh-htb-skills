@@ -123,7 +123,7 @@ export async function apply(ctx, config) {
     )
   }
   registerSherlockTools(ctx, config)
-  // 作战状态账本（fact 节点 / intent 边）。与 router/ 的 state 事件共用
+  // 作战状态账本（fact 节点 / intent 边）。与 dsh-htb-router 的 state 事件共用
   // <stateRoot>/<machine>-state.jsonl —— 两边合起来是"全局黑板"（见 state-tools.js 头注）。
   registerStateTools(ctx, config)
   if (config.guard !== false) {
@@ -151,6 +151,10 @@ export async function apply(ctx, config) {
     ...(config.struggleArtifactDir ? { artifactDir: config.struggleArtifactDir } : {}),
     ...(config.struggleThresholds ? { thresholds: config.struggleThresholds } : {}),
     ...(config.struggleGate === false ? { gate: false } : {}),
+    // 2026-10-26：产物扫描节流。测试要把它调大来逼出"write 强制重扫"这条路径，
+    // 所以必须能透传；生产默认 1000ms，设 0 退回每次重扫。
+    ...(config.struggleArtifactScanIntervalMs !== undefined ? { artifactScanIntervalMs: config.struggleArtifactScanIntervalMs } : {}),
+    ...(config.struggleIntervene === false ? { intervene: false } : {}),
   })
   // 出站目标观测（2026-10-21 新增）：只记录，永不拦截。
   // 它不是授权边界 —— 强制的 scope 必须在执行环境层做，理由见 scope-observe.js 头注。

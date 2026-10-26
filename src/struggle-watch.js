@@ -67,9 +67,10 @@
  */
 
 import { randomUUID } from 'node:crypto'
-import { appendFileSync, readdirSync, statSync } from 'node:fs'
+import { readdirSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
+import { createLogSink } from './log-sink.js'
 import { DEFAULT_THRESHOLDS, assessStruggle, isLowOutput } from './struggle.js'
 
 /** Stable Cordis plugin name. */
@@ -103,6 +104,20 @@ export const DEFAULT_IGNORE = Object.freeze([
 
 /** 递归下钻的默认层数：`loot/`(0) → `loot/<machine>/`(1) → `loot/<machine>/shots/`(2)。 */
 export const DEFAULT_ARTIFACT_MAX_DEPTH = 2
+
+/**
+ * 产物扫描的默认节流间隔（毫秒）。
+ *
+ * 实测依据（2026-10-26，Windows）：`artifactMtimeMs` 200 文件 1.37 ms、
+ * 1000 文件 6.85 ms、3000 文件 21 ms，严格线性；而它原本**每次工具调用都跑**，
+ * 占 struggle-watch 单次开销的 71%。
+ *
+ * 取 1 秒的理由：它服务的是"距上次产物变更多久"，下游阈值是分钟级
+ * （stall 45 分钟 / budget 6 小时），1 秒的缓存误差在判定上不可见。
+ * `write` / `edit` 会**强制重扫**，所以"刚写了文件"不会被延后。
+ * 设 0 可完全关掉节流（退回每次重扫，用于排查）。
+ */
+export const DEFAULT_ARTIFACT_SCAN_INTERVAL_MS = 1000
 
 /**
  * 取目录下（**有界递归**）最新的文件 mtime。
@@ -368,11 +383,17 @@ export function buildObservation(state, now) {
   }
 }
 
-/** 一行观测日志。 */
-function logLine(path, row) {
-  try {
-    appendFileSync(path, `${JSON.stringify(row)}\n`, 'utf8')
-  } catch { /* 日志写不动不能影响会话 */ }
+/**
+ * 一行观测日志 —— 2026-10-26 起由 {@link createLogSink} 复用 fd 写入。
+ *
+ * 原来的 `appendFileSync` 每次调用都要 open + write + close（Windows 实测
+ * 0.397 ms/次），而本模块**每次工具调用都写一行**，于是这项固定开销
+ * 占了单次调用总开销的 22%。复用 fd 后降到 0.0019 ms，语义不变
+ * （writeSync 同步落内核，写完即可读）。
+ */
+function createLogLine(path) {
+  const sink = createLogSink(path)
+  return (row) => sink.writeRecord(row)
 }
 
 /**
@@ -558,7 +579,35 @@ export function apply(ctx, config) {
   const cfg = config ?? {}
   if (cfg.enabled === false) return
   const logPath = cfg.logPath ?? DEFAULT_LOG_PATH
+  // 日志写入器：fd 复用，见 createLogLine 头注（2026-10-26 热路径实测）。
+  const logLine = createLogLine(logPath)
   const artifactDir = cfg.artifactDir ?? join(process.cwd(), 'loot')
+
+  // ── 产物扫描节流（2026-10-26）──────────────────────────────────────────
+  // `artifactMtimeMs` 是**有界递归 + 每个文件一次 statSync**：实测 200 文件
+  // 1.37 ms、1000 文件 6.85 ms、3000 文件 21 ms，严格线性。而它在每次工具调用
+  // 都要跑一次，占本模块单次开销的 **71%**（1.37 / 1.94 ms）。
+  //
+  // 但它服务的问题精度要求很低：`msSinceArtifactChange` 只用来判断"多久没产出"，
+  // 阈值是**分钟级**（stall 45 分钟 / budget 6 小时）。毫秒级的缓存误差无影响。
+  //
+  // 所以按时间节流。**但 write/edit 强制重扫** —— 它们是产物变更的直接来源，
+  // 不能让缓存把"刚写了文件"这件事延后感知（那会让 stall 误判）。
+  // 其余工具（ssh_exec 等）本身不写 loot，用缓存值即可。
+  const scanIntervalMs = Number.isFinite(Number(cfg.artifactScanIntervalMs)) && Number(cfg.artifactScanIntervalMs) >= 0
+    ? Number(cfg.artifactScanIntervalMs)
+    : DEFAULT_ARTIFACT_SCAN_INTERVAL_MS
+  const ARTIFACT_TOOLS = new Set(['write', 'edit'])
+  const scanCache = { at: 0, value: undefined }
+  /** 取产物 mtime：write/edit 强制重扫，其余按 `scanIntervalMs` 节流。 */
+  const artifactOf = (exec, now) => {
+    if (!ARTIFACT_TOOLS.has(exec?.name) && now - scanCache.at < scanIntervalMs) {
+      return scanCache.value
+    }
+    scanCache.value = artifactMtimeMs(artifactDir)
+    scanCache.at = now
+    return scanCache.value
+  }
   const thresholds = { ...DEFAULT_THRESHOLDS, ...(cfg.thresholds ?? {}) }
   const intervene = cfg.intervene !== false
   const gate = cfg.gate !== false
@@ -594,7 +643,7 @@ export function apply(ctx, config) {
         if (state === undefined) {
           const segment = (segmentOf.get(agentKey) ?? 0) + 1
           segmentOf.set(agentKey, segment)
-          state = createState(now, artifactMtimeMs(artifactDir))
+          state = createState(now, artifactOf(exec, now))
           state.segment = segment
           states.set(agentKey, state)
         }
@@ -603,7 +652,7 @@ export function apply(ctx, config) {
         noteResult(state, result)
         // 两个产物口径取较新：工具产出（write/edit）优先，文件系统 mtime 兜底。
         noteToolArtifact(state, exec, result, now)
-        noteArtifact(state, artifactMtimeMs(artifactDir), now)
+        noteArtifact(state, artifactOf(exec, now), now)
         // 产出比的**持续性**：低产是状态、不是快照 —— 先按当前密度推进低产起点，
         // 再组装快照（这时 `msSinceOutputLow` 才是"已经低产了多久"）。
         noteOutputLow(state, buildObservation(state, now), thresholds, now)
@@ -629,7 +678,7 @@ export function apply(ctx, config) {
           if (released) state.stopLatched = false
           else if (verdict.action === 'stop') state.stopLatched = true
         }
-        logLine(logPath, {
+        logLine({
           ts: new Date(now).toISOString(),
           agent: agentKey,
           // 🔴 状态段序号：统计**事件**时的切分键（行计数会重复计数，见文件头修正 2）。

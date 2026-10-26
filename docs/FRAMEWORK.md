@@ -56,7 +56,7 @@
 
 | 模块 | 做什么 | 默认阈值 |
 |---|---|---|
-| `struggle.js` + `struggle-watch.js` | 停滞 / 重复 / 超预算判定；停止协议注入与闸 | stall 90 min · budget 6 h · repeat 3 |
+| `struggle.js` + `struggle-watch.js` | 停滞 / 重复 / 超预算判定；停止协议注入与闸；产物 mtime **按 1s 节流**（write/edit 强制重扫） | stall 90 min · budget 6 h · repeat 3 · scan 1 s |
 | `scope-observe.js` | 记录出站目标（只记录，**永不拦截**） | — |
 | `context-hygiene.js` | 单次输出超标 + **累积超标** | 200 行 · 60 次窗口 ≤2 · 20 次窗口 ≥40K 字符 |
 | `error-classify.js` | 失败归 6 类（channel / permission / auth / timeout / network / syntax / semantic）；同类第 2 次提示"是否同因"，第 3 次升级"换层/换通道" | 每类 ≤2 条 |
@@ -77,6 +77,39 @@
 ```
 
 **为什么守卫在观测前**：守卫要拦"还没发生"的动作；观测只能看"已经发生"的结果。
+
+---
+
+## 3.1 热路径开销（2026-10-26 实测）
+
+四个 `post-execute` 模块 + 守卫链在**每次工具调用**都要跑一遍，所以它们的时间是
+"每次调用都付"的税。用真实会话（Atlas，332 条执行结果 / 474 KB）实测：
+
+| 环节 | 优化前 | 优化后 |
+|---|---|---|
+| `struggle-watch` | 1.942 ms | **0.009 ms** |
+| `error-classify` | 0.044 ms | 0.012 ms |
+| `auto-state` | 0.016 ms | 0.016 ms |
+| `context-hygiene` | 0.007 ms | 0.003 ms |
+| **四模块串联** | **2.007 ms** | **0.041 ms** |
+| `guard` 链（pre-execute） | 0.121 ms | 0.104 ms |
+
+两处改动：
+
+1. **产物扫描从 O(文件数) 变成 O(1)**。`artifactMtimeMs` 是有界递归 + 每文件一次
+   `statSync`，实测 200 文件 1.45 ms、1000 文件 6.76 ms、**3000 文件 20.96 ms**，
+   而它原本每次调用都跑。改为按 `artifactScanIntervalMs`（默认 1 s）节流，
+   `write`/`edit` 强制重扫。下游阈值是分钟级（stall 45 min / budget 6 h），
+   1 秒的缓存误差在判定上不可见。
+   规模化差距：loot 3000 文件时，一次 365 次调用的会话从 **7.6 s** 降到 0.4 s。
+
+2. **日志写入复用 fd**（`log-sink.js`）。`appendFileSync` 每次 open+write+close，
+   Windows 实测 0.397 ms；改成首次 `openSync` + 之后 `writeSync` 后 0.0019 ms。
+   语义不变：`writeSync` 同步落内核，写完即可读。
+
+**不做的事**：`guard` 里 12 条正则对整条命令的扫描占它 93% 的时间（0.091 ms），
+但那属于必要成本 —— 加"关键词预筛"能再省 0.08 ms，相对一次 `ssh_exec`（数百 ms）
+是 0.03%，属于过度优化。
 
 **为什么 struggle 在 hygiene 之前**：`post-execute` 的 handler 是链式的（各自 `await next()`），
 前面的先跑。struggle 需要看到原始结果（它要数失败率），所以排在会往 content 里追加东西的模块之前。

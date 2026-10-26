@@ -404,5 +404,56 @@ console.log('接线：struggleWatch:false 不注册')
   check('没有 post-execute 监听', listeners.get('tools/post-execute') === undefined)
 }
 
+console.log('闸：产物扫描节流（2026-10-26 性能优化）')
+{
+  // 背景：artifactMtimeMs 是 O(目录文件数) 的递归 stat，原本每次工具调用都跑，
+  // 实测 200 文件 1.45 ms / 3000 文件 21 ms，占本模块单次开销 71%。
+  // 改成按时间节流 + write/edit 强制重扫。这里钉住两条不能破的性质：
+  //   ① write 之后必须**立刻**看到新 mtime（否则 stall 会误报"很久没产出"）
+  //   ② 节流窗口内不得读取新 mtime（否则节流等于没做）
+  const dir = mkdtempSync(join(tmpdir(), 'htb-throttle-'))
+  const loot = join(dir, 'loot')
+  mkdirSync(loot, { recursive: true })
+  const art = join(loot, 'note.md')
+  writeFileSync(art, 'v1')
+  utimesSync(art, 1700000000, 1700000000)
+
+  let handler
+  applyPlugin(
+    {
+      on: (e, f) => { if (e === 'tools/post-execute') { const a = []; a.push(f); handler = f } },
+      tools: { guard: () => () => {}, register: () => () => {} },
+      skills: { registerProvider: () => {} },
+    },
+    {
+      skillsEnabled: false, contextHygiene: false, errorClassify: false, autoState: false,
+      struggleLogPath: join(dir, 'w.jsonl'),
+      struggleArtifactDir: loot,
+      struggleIntervene: false,
+      struggleGate: false,
+      // 故意设很大：把"只能靠 write 强制重扫"这条路径逼出来
+      struggleArtifactScanIntervalMs: 60000,
+    },
+  )
+
+  const allow = async () => ({ kind: 'accept' })
+  const execOf = (name) => ({ name, arguments: { command: 'x' }, agent: { id: 'throttle' } })
+  await handler(execOf('ssh_exec'), { content: [] }, allow)
+
+  // 把产物改到"未来"，模拟 write 刚写完
+  writeFileSync(art, 'v2')
+  utimesSync(art, 1800000000, 1800000000)
+
+  await handler(execOf('ssh_exec'), { content: [] }, allow)   // 节流内：不应读到
+  await handler(execOf('write'), { content: [] }, allow)      // 强制重扫：应读到
+
+  const rows = readFileSync(join(dir, 'w.jsonl'), 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l))
+  check('节流窗口内不读取新 mtime', rows[1].msSinceArtifactChange >= 0,
+    `实际 ${rows[1].msSinceArtifactChange}（负数=误读）`)
+  check('write 后立刻感知产物变更', rows[2].msSinceArtifactChange < 50,
+    `实际 ${rows[2].msSinceArtifactChange} ms`)
+  rmSync(dir, { recursive: true, force: true })
+}
+
 console.log(failed === 0 ? '\n✅ 监视器测试全部通过' : `\n❌ ${failed} 条失败`)
 process.exit(failed === 0 ? 0 : 1)

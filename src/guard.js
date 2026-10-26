@@ -278,22 +278,43 @@ function loadFileRules(path) {
  * @param path - 规则文件路径；省略则用 {@link DEFAULT_RULES_PATH}。
  * @returns 生效的规则数组。
  */
+/**
+ * `activeRules` 的结果缓存：`path → { entries, rules }`。
+ *
+ * 为什么需要（2026-10-26 实测）：本函数在**每次工具调用**都被 `apply` 里的
+ * guard 调用一次，而它每次都重建 `Map(RED_LINES)`、逐条 `compileRule`
+ * （= `new RegExp`）、再 filter+concat。18 条规则下这部分实测约 0.05 ms/次，
+ * 全是重复劳动 —— 规则文件没变时结果必然相同。
+ *
+ * 失效判据用 `entries` 的**引用相等**：`loadFileRules` 已按 mtime 缓存，
+ * 文件不变则返回同一个数组；文件改了 mtime 变、重新解析出新数组，引用不等 ⇒ 重建。
+ */
+const activeCache = new Map()
+
 export function activeRules(path = DEFAULT_RULES_PATH) {
   const entries = path ? loadFileRules(path) : undefined
-  if (!entries) return RED_LINES
+  const cached = activeCache.get(path)
+  if (cached !== undefined && cached.entries === entries) return cached.rules
 
-  const byId = new Map(RED_LINES.map(rule => [rule.id, rule]))
-  const disabled = new Set()
-  const appended = []
-  for (const raw of entries) {
-    if (!raw || typeof raw.id !== 'string') continue
-    if (raw.enabled === false) { disabled.add(raw.id); continue }
-    const compiled = compileRule(raw)
-    if (!compiled) continue
-    if (byId.has(compiled.id)) byId.set(compiled.id, compiled)
-    else appended.push(compiled)
+  let rules
+  if (!entries) {
+    rules = RED_LINES
+  } else {
+    const byId = new Map(RED_LINES.map(rule => [rule.id, rule]))
+    const disabled = new Set()
+    const appended = []
+    for (const raw of entries) {
+      if (!raw || typeof raw.id !== 'string') continue
+      if (raw.enabled === false) { disabled.add(raw.id); continue }
+      const compiled = compileRule(raw)
+      if (!compiled) continue
+      if (byId.has(compiled.id)) byId.set(compiled.id, compiled)
+      else appended.push(compiled)
+    }
+    rules = [...byId.values()].filter(rule => !disabled.has(rule.id)).concat(appended)
   }
-  return [...byId.values()].filter(rule => !disabled.has(rule.id)).concat(appended)
+  activeCache.set(path, { entries, rules })
+  return rules
 }
 
 /**
@@ -436,8 +457,13 @@ export function checkCommand(command, rules = RED_LINES) {
     const viaInterpreter = INTERPRETER.test(text)
     for (const rule of rules) {
       // 逐条扫全部匹配：同一条命令里可能既有引号内的假命中、也有引号外的真命中。
-      const flags = rule.re.flags.includes('g') ? rule.re.flags : `${rule.re.flags}g`
-      const scan = new RegExp(rule.re.source, flags)
+      // 🔴 2026-10-26：扫描用的 `g` 版本**按规则惰性缓存**（见 scannerOf）。
+      //    原来每次调用都 `new RegExp(rule.re.source, flags)` —— 18 条规则 × 1~2 个
+      //    变体 = 每次工具调用 18~36 次正则编译，实测占守卫链 0.116 ms 的绝大部分。
+      //    本函数是同步的，单线程内不会有两个扫描同时进行，所以复用 lastIndex 安全；
+      //    每次进入前显式归零。
+      const scan = scannerOf(rule)
+      scan.lastIndex = 0
       let match
       while ((match = scan.exec(text)) !== null) {
         // 🔴 判据是「匹配**整段**落在引号内」，不是「起点落在引号内」（见 fullyQuoted）。
@@ -449,6 +475,28 @@ export function checkCommand(command, rules = RED_LINES) {
     }
   }
   return undefined
+}
+
+/**
+ * 取某条规则的「全局扫描版」正则（惰性创建 + 复用）。
+ *
+ * 为什么需要单独一份：`checkCommand` 要 `exec` 循环扫出**全部**匹配，因此需要 `g`；
+ * 而规则自带的正则可能是非全局的。原来每次现编译一份，成本在热路径上很显眼。
+ *
+ * 用 WeakMap 缓存：规则对象被替换（改规则文件后 `activeRules` 返回新对象）时，
+ * 旧缓存随对象一起被 GC，不会泄漏，也不需要手动失效。
+ * @param rule - 规则对象（含 `re`）。
+ * @returns 带 `g` 标志的正则（同一个对象，调用方负责重置 lastIndex）。
+ */
+const SCANNERS = new WeakMap()
+function scannerOf(rule) {
+  let scan = SCANNERS.get(rule)
+  if (scan === undefined) {
+    const flags = rule.re.flags.includes('g') ? rule.re.flags : `${rule.re.flags}g`
+    scan = new RegExp(rule.re.source, flags)
+    SCANNERS.set(rule, scan)
+  }
+  return scan
 }
 
 /**

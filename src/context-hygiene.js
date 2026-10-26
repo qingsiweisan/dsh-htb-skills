@@ -26,9 +26,9 @@
  *   来算，而不是按会话总数。绝对上限保留，只防刷屏。
  */
 
-import { appendFileSync, existsSync, mkdirSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { dirname, isAbsolute, join, resolve } from 'node:path'
+import { isAbsolute, join, resolve } from 'node:path'
+import { createLogSink } from './log-sink.js'
 
 /** Stable Cordis plugin name. */
 export const name = 'htb-context-hygiene'
@@ -192,6 +192,8 @@ export function apply(ctx, config) {
     ? (isAbsolute(cfg.logPath) ? cfg.logPath : resolve(process.cwd(), cfg.logPath))
     : DEFAULT_LOG_PATH
   const tools = new Set(Array.isArray(cfg.tools) && cfg.tools.length > 0 ? cfg.tools : EXEC_TOOLS)
+  // 日志：fd 复用（2026-10-26）。两处写入共用同一个 sink。
+  const logSink = createLogSink(logPath)
   const accumWindow = Number.isFinite(Number(cfg.accumWindowCalls)) && Number(cfg.accumWindowCalls) > 0
     ? Number(cfg.accumWindowCalls)
     : DEFAULT_ACCUM_WINDOW_CALLS
@@ -246,18 +248,15 @@ export function apply(ctx, config) {
 
         t.accumNotices += 1
         t.lastAccumAt = t.calls
-        try {
-          if (!existsSync(dirname(logPath))) mkdirSync(dirname(logPath), { recursive: true })
-          appendFileSync(logPath, `${JSON.stringify({
-            ts: new Date().toISOString(),
-            agent: agentId,
-            tool: exec.name,
-            kind: 'accum',
-            windowCalls: t.recent.length,
-            windowChars: recentChars,
-            accumChars,
-          })}\n`)
-        } catch { /* 日志写失败不影响提示 */ }
+        logSink.writeRecord({
+          ts: new Date().toISOString(),
+          agent: agentId,
+          tool: exec.name,
+          kind: 'accum',
+          windowCalls: t.recent.length,
+          windowChars: recentChars,
+          accumChars,
+        })
 
         const base0 = Array.isArray(decision?.content) ? decision.content : (result.content ?? [])
         return { kind: 'accept', content: [...base0, { type: 'text', text: buildAccumNotice(t.recent.length, recentChars) }] }
@@ -282,21 +281,18 @@ export function apply(ctx, config) {
       }
 
       // 记录：无论是否提示都写，这样能统计"主 agent 自己吃了多少上下文"。
-      try {
-        if (!existsSync(dirname(logPath))) mkdirSync(dirname(logPath), { recursive: true })
-        appendFileSync(logPath, `${JSON.stringify({
-          ts: new Date().toISOString(),
-          agent: agentId,
-          tool: exec.name,
-          lines: m.lines,
-          chars: m.chars,
-          threshold,
-          truncated: m.truncated,
-          noticed: shouldNotice,
-          calls: t.calls,
-          windowNotices: recent.length,
-        })}\n`)
-      } catch { /* 日志写失败不影响提示 */ }
+      logSink.writeRecord({
+        ts: new Date().toISOString(),
+        agent: agentId,
+        tool: exec.name,
+        lines: m.lines,
+        chars: m.chars,
+        threshold,
+        truncated: m.truncated,
+        noticed: shouldNotice,
+        calls: t.calls,
+        windowNotices: recent.length,
+      })
 
       if (!shouldNotice) return decision
 

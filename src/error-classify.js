@@ -26,9 +26,9 @@
  *   - 任何异常都不影响原结果
  */
 
-import { appendFileSync, existsSync, mkdirSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { dirname, isAbsolute, join, resolve } from 'node:path'
+import { isAbsolute, join, resolve } from 'node:path'
+import { createLogSink } from './log-sink.js'
 
 /** Stable Cordis plugin name. */
 export const name = 'htb-error-classify'
@@ -238,12 +238,10 @@ export function apply(ctx, config) {
     return t
   }
 
-  const log = (record) => {
-    try {
-      if (!existsSync(dirname(logPath))) mkdirSync(dirname(logPath), { recursive: true })
-      appendFileSync(logPath, `${JSON.stringify(record)}\n`)
-    } catch { /* 日志写失败不影响提示 */ }
-  }
+  // 日志：fd 复用（2026-10-26）。原来每次 existsSync + appendFileSync，
+  // 在"每类错误都要记一行"的场景下是纯固定开销。
+  const logSink = createLogSink(logPath)
+  const log = (record) => logSink.writeRecord(record)
 
   ctx.on('tools/post-execute', async (exec, result, next) => {
     const decision = await next()
