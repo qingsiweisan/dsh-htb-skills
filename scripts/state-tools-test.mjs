@@ -4,12 +4,14 @@
  *
  * 覆盖两条**工具层强制**的硬规则（它们是这套账本存在的理由，一旦失守就退化成自由文本）：
  *   ① cred/vuln/flag 且 confidence=verified ⇒ 必须带 evidenceId（否则必须显式 inferred）
- *   ② htb_frontier op=dead ⇒ 必须带 baselineEvidenceId（"没有对照的全否不是结论"）
+ *   ② htb_frontier op=dead ⇒ baselineEvidenceId **可选**：带则校验存在性，
+ *      不带则必须给 reasonCode，并记为"未对照·可重试"（2026-10-26 解自锁，
+ *      因为原规则让 dead 三场调用数 0/0/0 —— 严格性换来机制完全失效）
  * 外加：from 悬空校验、证据 id 形态、折叠语义、brief 降级。
  *
  * 契约：exit 0 = 通过；任何 FAIL 一律 exit 1。
  */
-import { mkdirSync, rmSync } from 'node:fs'
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { _internal } from '../src/state-tools.js'
@@ -40,9 +42,17 @@ try {
   // 硬规则 ②
   check('frontier add: from 悬空被拒', I({ op: 'add', machine: 'G', action: 'x', from: 'f99' }).startsWith('⚠️'))
   check('frontier add: 合法通过', I({ op: 'add', machine: 'G', action: 'probe', from: 'f1' }).startsWith('✅'))
-  check('dead 无 baselineEvidenceId 被拒', I({ op: 'dead', machine: 'G', id: 'i1' }).startsWith('⚠️'))
+  // 2026-10-26 解自锁：不带 baseline 也可以，但**必须给 reasonCode**。
+  check('dead 无 baseline 且无 reasonCode 被拒', I({ op: 'dead', machine: 'G', id: 'i1' }).startsWith('⚠️'))
   check('dead: baseline 形态非法被拒', I({ op: 'dead', machine: 'G', id: 'i1', baselineEvidenceId: 'x' }).startsWith('⚠️'))
-  check('dead 带 baseline 通过', I({ op: 'dead', machine: 'G', id: 'i1', baselineEvidenceId: GOOD_EV, reason: 'r' }).startsWith('✅'))
+  check('dead 无 baseline + reasonCode 通过', I({ op: 'dead', machine: 'G', id: 'i1', reasonCode: 'auth-failed', reason: '字典跑完' }).startsWith('✅'))
+  // 未对照的死路要在 list 里显式标出，否则会被当成"已验证不通"
+  check('list 标出未对照·可重试', I({ op: 'list', machine: 'G' }).includes('未对照·可重试'))
+  // brief 要把死路传给子 agent —— Atlas 那场 subagent 白花时间重新枚举就是这个缺失
+  check('brief 含已知死路段', B({ intent: 'i1', machine: 'G' }).includes('已知死路'))
+  check('dead 带 baseline 通过（另一条 intent）',
+    I({ op: 'add', machine: 'G', action: '带对照的路' }).startsWith('✅')
+    && I({ op: 'dead', machine: 'G', id: 'i2', baselineEvidenceId: GOOD_EV, reason: 'r' }).startsWith('✅'))
 
   // 折叠语义：事件溯源后 intent 状态应为 dead，且 baseline 保留
   const listed = I({ op: 'list', machine: 'G' })
@@ -58,6 +68,18 @@ try {
 
   // 规则表解析（与 router 侧一致性）
   check('parseRouterRules 可解析（>0 条）', _internal !== undefined)
+
+  // ── 旧账本兼容（2026-10-26）────────────────────────────────────────────
+  // `intent-update` 从这一版才开始写 `run`。旧会话的 claim/done/dead 全都没有该字段，
+  // 若按 `r.run === want` 硬过滤，历史死路会永久不可见（状态永远停在 todo）。
+  // 期望：没有 run 的 intent-update 继承其所属 intent 的 run。
+  writeFileSync(join(R, 'Old-state.jsonl'), [
+    JSON.stringify({ ts: '2026-10-20T00:00:00Z', type: 'intent', id: 'i1', action: '旧会话里的死路', status: 'todo', run: 'r1' }),
+    JSON.stringify({ ts: '2026-10-20T00:01:00Z', type: 'intent-update', id: 'i1', status: 'dead', reasonCode: 'auth-failed' }),
+  ].join('\n') + '\n')
+  const oldList = I({ op: 'list', machine: 'Old' })
+  check('旧账本：intent-update 继承 run 后可见', oldList.includes('## dead'), oldList.slice(0, 80))
+  check('旧账本：死因仍可读', oldList.includes('auth-failed'))
 } finally {
   rmSync(R, { recursive: true, force: true })
 }

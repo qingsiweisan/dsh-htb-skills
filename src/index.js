@@ -30,6 +30,7 @@ import { apply as applyScopeObserve } from './scope-observe.js'
 import { apply as applyContextHygiene } from './context-hygiene.js'
 import { apply as applyErrorClassify } from './error-classify.js'
 import { apply as applyAutoState } from './auto-state.js'
+import { apply as applyMachineOwn } from './machine-own.js'
 
 /** Stable Cordis plugin name. */
 export const name = 'htb-skills'
@@ -133,6 +134,16 @@ export async function apply(ctx, config) {
       ...(config.guardRulesPath !== undefined ? { rulesPath: config.guardRulesPath } : {}),
     })
   }
+  // 靶机 flag 提交 + 完成前交付检查（2026-10-26）。
+  // 位置刻意在 registerStateTools 之后 —— 它要读同一份 <machine>-state.jsonl。
+  if (config.machineOwn !== false) {
+    applyMachineOwn(ctx, {
+      ...(config.machineOwnBaseUrl ? { baseUrl: config.machineOwnBaseUrl } : {}),
+      ...(config.machineOwnTokenPath ? { tokenPath: config.machineOwnTokenPath } : {}),
+      ...(config.stateRoot ? { stateRoot: config.stateRoot } : {}),
+      ...(config.machineOwnGoalGate === false ? { goalGate: false } : {}),
+    })
+  }
   if (config.askGuard !== false) {
     applyAskGuard(ctx, {
       ...(config.askGuardTools ? { tools: config.askGuardTools } : {}),
@@ -200,6 +211,8 @@ export async function apply(ctx, config) {
       ...(config.autoStateMinCallsForSummary !== undefined ? { minCallsForSummary: config.autoStateMinCallsForSummary } : {}),
       ...(config.autoStateSwitchAfterCalls !== undefined ? { switchAfterCalls: config.autoStateSwitchAfterCalls } : {}),
       ...(config.autoStateFrontBudgetCalls !== undefined ? { frontBudgetCalls: config.autoStateFrontBudgetCalls } : {}),
+      ...(config.autoStateStaleCallsForReview !== undefined ? { staleCallsForReview: config.autoStateStaleCallsForReview } : {}),
+      ...(config.autoStateStaleMinutesForReview !== undefined ? { staleMinutesForReview: config.autoStateStaleMinutesForReview } : {}),
       ...(config.autoStateLogPath ? { logPath: config.autoStateLogPath } : {}),
     })
   }

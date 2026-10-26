@@ -82,8 +82,8 @@ console.log('接线（经 apply()）')
     skills: { registerProvider: () => {} },
   }
   await apply(ctx, { skillsEnabled: false })
-  // 2026-10-25：+1 = struggle-watch 的停止协议闸。
-  check('apply 注册了四个守卫（红线 + 提问 + WP + 停止协议）', guards.length === 4)
+  // 2026-10-25：+1 = struggle-watch 的停止协议闸；2026-10-26：+1 = machine-own 的交付检查。
+  check('apply 注册了五个守卫（红线 + 提问 + WP + 停止协议 + 交付检查）', guards.length === 5)
   const askDenied = guards.map(g => g(INCIDENT)).filter(Boolean)
   check('真实事故被拦', askDenied.length === 1 && askDenied[0].includes('[ask-for-writeup]'))
   const legit = ask('靶机已降级', '怎么处理？', ['直接 reset', '等一下'])
@@ -98,7 +98,7 @@ console.log('接线（经 apply()）')
     skills: { registerProvider: () => {} },
   }
   await apply(ctx, { skillsEnabled: false, askGuard: false })
-  check('askGuard:false 只注册三个守卫', guards.length === 3)
+  check('askGuard:false 只注册四个守卫', guards.length === 4)
 }
 
 console.log(failed === 0 ? '\n✅ 提问守卫测试全部通过' : `\n❌ ${failed} 条失败`)

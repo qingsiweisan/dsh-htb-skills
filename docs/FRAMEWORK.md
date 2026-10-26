@@ -34,20 +34,22 @@
 
 ## 2. 模块清单
 
-### 2.1 工具（9 个 `htb_*`）
+### 2.1 工具（10 个 `htb_*`）
 
 | 工具 | 作用 |
 |---|---|
 | `htb_fact` | 事实节点：host / service / cred / vuln / flag / note；`cred·vuln·flag` + `verified` 必须带 evidenceId |
 | `htb_frontier` | 意图边：`add / claim / done / dead`；`dead` 必须带 `baselineEvidenceId`；支持 `assume / ifWrong / budget / reasonCode` |
 | `htb_brief` | 把主 agent 的假设与退路写成子 agent 的任务书 |
+| `htb_machine_own` | 提交靶机 flag 到平台（user / root 同一端点 `POST /api/v5/machine/own`）；成功后写 `flag-own` 记录供交付检查识别 |
 | `htb_sherlock_*`（6 个） | HTB Labs API：info / tasks / download / submit / submit-file / progress |
 
-### 2.2 守卫（4 道，`tools.guard`）
+### 2.2 守卫（5 道，`tools.guard`）
 
 | 守卫 | 拦什么 | 可关 |
 |---|---|---|
 | `guard.js` | 会杀掉自己 / 打挂靶机的命令（12 条内置 + 外置规则表，按 mtime 热重载） | `guard: false` |
+| `machine-own.js` | **完成前交付检查**：账本里有 flag 但没提交记录 → 拦第一次 `update_goal complete`，第二次放行 | `machineOwnGoalGate: false` |
 | `ask-guard.js` | 把 writeup / 提示 / payload 细节当选项的提问 | `askGuard: false` |
 | `wp-guard.js` | 打靶会话读官方 writeup | `wpGuard: false` |
 | `struggle-watch.js` | 停止协议触发后启动长任务（爆破 / 后台轮询 / ≥10 分钟等待） | `struggleGate: false` |
@@ -61,6 +63,7 @@
 | `context-hygiene.js` | 单次输出超标 + **累积超标** | 200 行 · 60 次窗口 ≤2 · 20 次窗口 ≥40K 字符 |
 | `error-classify.js` | 失败归 6 类（channel / permission / auth / timeout / network / syntax / semantic）；同类第 2 次提示"是否同因"，第 3 次升级"换层/换通道" | 每类 ≤2 条 |
 | `auto-state.js` | 从命令推断战线（连续 3 次才切）；切换摘要；**战线内 40 次调用零事实 → 当场问"有没有更快的原语"** | 40 次 |
+| `auto-state.js`（续） | **长空档 → 建议派"审查者"子 agent**：连续 N 次调用无新 fact/evidence 且空档 ≥M 分钟 | 60 次 + 20 分钟 |
 
 ---
 
@@ -72,6 +75,7 @@
 1. registerSherlockTools / registerStateTools     工具先注册
 2. guard → askGuard → wpGuard                     → 三道确定性守卫
 3. struggle-watch                                  → 观测 + 停止协议闸（第 4 道守卫）
+3b. machine-own                                    → flag 提交工具 + 交付检查（第 5 道守卫）
 4. scope-observe                                   → 只记录
 5. context-hygiene → error-classify → auto-state    → 三个 post-execute 反馈模块
 ```
@@ -110,6 +114,68 @@
 **不做的事**：`guard` 里 12 条正则对整条命令的扫描占它 93% 的时间（0.091 ms），
 但那属于必要成本 —— 加"关键词预筛"能再省 0.08 ms，相对一次 `ssh_exec`（数百 ms）
 是 0.03%，属于过度优化。
+
+---
+
+## 3.2 决策支持的三处修补（2026-10-26）
+
+用三场真实会话（DutyBound / Watcher / Atlas）量化后，发现"决策类机制"的问题不在判据，
+而在**没人用**：
+
+| 场次 | `htb_frontier` | `dead` | `evidence_add` |
+|---|---|---|---|
+| DutyBound | 0 | **0** | 2 |
+| Watcher | 3 | **0** | 3 |
+| Atlas | 0 | **0** | 2 |
+
+三场加起来 `dead` 为 0 —— 连带 `reasonCode` 死因枚举、连续判死触发换层检查，全部从未跑过。
+原因是一个**自锁**：写 `dead` 必须带已存在的 `evidenceId`，而 `evidence` 只在成功时写
+（flag / RCE 验证），死路没有 evidence ⇒ 写不了 ⇒ 永远不换层。
+
+### 修补 1：`dead` 解自锁
+
+`baselineEvidenceId` 从**必填**改成**可选**：
+
+- 不带 → 记 `deadVerified: false`，但**必须给 `reasonCode`**；`list` 显示 `[未对照·可重试]`
+- 带 → 照旧校验形态与存在性，记 `deadVerified: true`
+
+取舍：**宁可要粗糙但存在的死路记录，也不要严谨但零记录。**
+
+顺带修了一个让这件事白做的既有 bug：`intent-update` 写入时没带 `run` 字段，而
+`selectRun` 在启用轮次隔离后只返回带 `run` 的记录 ⇒ 所有 `claim/done/dead` 更新
+在 `list`/`brief` 里**完全不可见**（状态永远停在 `todo`）。
+
+`htb_brief` 同时新增「已知死路」段：把 dead 意图传给子 agent，避免它重走已排除的路
+（Atlas 那场 subagent 前 8 分钟就在重新枚举）。
+
+### 修补 2：长空档 → 建议换视角
+
+`auto-state` 新增 `review-suggest`：连续 60 次调用 + 20 分钟没有新 `fact`/`evidence` 时，
+建议派一个**审查者**子 agent（职责是审查工具与假设，不是重跑步骤）。
+
+为什么是"建议"不是"闸"：三场的空档分布里，DutyBound 的 85 分钟无 fact 是**正常攻坚**
+（SQLi 提取 → hashcat → 提权，动作族一直在变），和 Atlas 的 56 分钟异常在"时长/调用数"
+上**分不开** —— 任何阈值都会误报正常会话。误报代价是"多一条提示 + 可能多派一个 12 分钟
+子 agent"，漏报代价是 Atlas 那 44 分钟 / Watcher 那 4.5 小时。
+
+为什么建议"换视角"而不是"停止"：Watcher 实测 `stop` 触发后，agent 在推理里**复述了规则**
+（"don't keep burning this session"）然后继续跑 2 小时。而 Atlas 那场 subagent 用 12 分钟
+解决了主 agent 44 分钟没解决的问题 —— 因为它没有"我已经试过很多次"的包袱。
+
+真实序列回放（60 次 + 20 分钟）：Atlas 73 分钟、Watcher 137 分钟各命中一次，都在浪费期内。
+
+### 修补 3：完成前交付检查
+
+新增 `htb_machine_own` 工具（`POST /api/v5/machine/own`，user / root 同一端点）+ 一道闸：
+`update_goal action=complete` 时，若账本里有 `flag` fact 却没有 `flag-own` 记录 → **拦第一次**，
+第二次放行。
+
+依据：Atlas 那场 108.3 分钟 `update_goal complete`，收尾消息写"需要我提交 flag 的话说一声"，
+然后静默 162 分钟；用户追问后才开始试，**试了 15 个端点**（v4 全 404）才撞对 v5。
+根因是 `htb_sherlock_submit` 只处理 Sherlock，machines 只能手写 curl —— 提交成了"额外工作"。
+
+只拦一次是因为死锁比漏拦更糟（练习机 / 已手动提交都合理）；
+另在 `htb_fact` 写 `kind=flag` 时**立刻**提示"还没提交"——那是唯一还看得见下一步的时机。
 
 **为什么 struggle 在 hygiene 之前**：`post-execute` 的 handler 是链式的（各自 `await next()`），
 前面的先跑。struggle 需要看到原始结果（它要数失败率），所以排在会往 content 里追加东西的模块之前。

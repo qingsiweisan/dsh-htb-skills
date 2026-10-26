@@ -62,8 +62,8 @@ const redLineGuard = (state, tool = 'pwsh') =>
   const { ctx, state } = fakeCtx()
   await apply(ctx, { skillsEnabled: false, guard: false })
   check('guard:false 不注册红线守卫', redLineGuard(state) === undefined)
-  // 2026-10-25：多了一个「停止协议闸」（struggle-watch），所以是 3 不是 2。
-  check('guard:false 不影响提问 / WP / 停止协议闸', state.guards.length === 3)
+  // 2026-10-25 +1「停止协议闸」；2026-10-26 +1「交付检查」（machine-own）⇒ 4。
+  check('guard:false 不影响提问 / WP / 停止协议 / 交付检查', state.guards.length === 4)
 }
 
 // 3. guardTools 收窄

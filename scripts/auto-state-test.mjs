@@ -201,6 +201,69 @@ check('enabled:false 不注册', l2 === undefined)
 
 check('覆盖 ssh_exec', EXEC_TOOLS.includes('ssh_exec'))
 
+console.log('\n闸：长空档换视角建议（2026-10-26）')
+{
+  // 依据：三场实测的最长无进展空档 —— Atlas 147 次 / 56 分钟、Watcher 214 次 / 269 分钟。
+  // 判据是"调用数 + 时长"双条件（只用调用数时早期密集侦察会瞬间攒够次数，全是误报）。
+  // 这里把两个阈值都调小，用小规模模拟验证四条性质。
+  const realNow = Date.now
+  let fake = 1_700_000_000_000
+  Date.now = () => fake
+
+  let h
+  apply(
+    { on: (e, f) => { if (e === 'tools/post-execute') h = f } },
+    { logPath: join(R, 'review.jsonl'), stateRoot: R, machine: 'RV', staleCallsForReview: 5, staleMinutesForReview: 1 },
+  )
+  const allow = async () => ({ kind: 'accept' })
+  const exec = (name, args = {}) => ({ name, arguments: args, agent: { id: 'rv-1' } })
+  const res = { content: [] }
+  const hasReview = (d) => (d?.content ?? []).some((c) => typeof c?.text === 'string' && c.text.includes('审查者'))
+
+  // ① 5 次调用 × 30 秒 = 2.5 分钟 > 1 分钟 → 命中
+  let n1 = 0
+  for (let i = 0; i < 5; i++) {
+    fake += 30000
+    if (hasReview(await h(exec('ssh_exec', { command: 'nmap -p- x' }), res, allow))) n1 += 1
+  }
+  check('长空档触发建议', n1 === 1, `实际 ${n1} 次`)
+
+  // ② 同一段空档内不重复提示
+  let n2 = 0
+  for (let i = 0; i < 5; i++) {
+    fake += 30000
+    if (hasReview(await h(exec('ssh_exec', { command: 'nmap -p- x' }), res, allow))) n2 += 1
+  }
+  check('同段不重复建议', n2 === 0, `实际 ${n2} 次`)
+
+  // ③ 写一条 fact → 计数与标记都重置
+  await h(exec('htb_fact', { op: 'add', kind: 'service', key: '445', value: 'smb' }), res, allow)
+  let n3 = 0
+  for (let i = 0; i < 5; i++) {
+    fake += 30000
+    if (hasReview(await h(exec('ssh_exec', { command: 'nmap -p- x' }), res, allow))) n3 += 1
+  }
+  check('fact 之后重新计数', n3 === 1, `实际 ${n3} 次`)
+
+  // ④ 只满足调用数、不满足时长 → 不提示（早期密集侦察的误报来源）
+  const realNow2 = Date.now
+  let h2
+  apply(
+    { on: (e, f) => { if (e === 'tools/post-execute') h2 = f } },
+    { logPath: join(R, 'review2.jsonl'), stateRoot: R, machine: 'RV2', staleCallsForReview: 3, staleMinutesForReview: 30 },
+  )
+  let n4 = 0
+  for (let i = 0; i < 10; i++) {
+    fake += 1000   // 每次只推进 1 秒，10 次共 10 秒 << 30 分钟
+    const d = await h2({ name: 'ssh_exec', arguments: { command: 'curl x' }, agent: { id: 'rv-2' } }, res, allow)
+    if (hasReview(d)) n4 += 1
+  }
+  check('调用数够但时长不够 → 不提示', n4 === 0, `实际 ${n4} 次`)
+
+  Date.now = realNow
+  void realNow2
+}
+
 rmSync(R, { recursive: true, force: true })
 console.log(fails === 0 ? 'auto-state-test: PASS' : `auto-state-test: ${fails} FAIL`)
 process.exit(fails === 0 ? 0 : 1)

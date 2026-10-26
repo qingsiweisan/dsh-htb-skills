@@ -66,6 +66,63 @@ export const DEFAULT_SWITCH_AFTER_CALLS = 3
  */
 export const DEFAULT_FRONT_BUDGET_CALLS = 40
 
+/**
+ * 长空档阈值：连续这么多次执行调用没有任何新事实/证据，就建议换视角。
+ *
+ * 🔴 2026-10-26 新增。依据三场的实测空档分布（距上次 htb_fact / evidence_add）：
+ *
+ *   场次        最长无进展        实际情况
+ *   DutyBound   225 次 / 85 min   **正常**（SQLi 提取 → hashcat → 提权，动作族一直在变）
+ *   Atlas       147 次 / 56 min   异常（8 次换字典，0 次读自己的 crack.c）
+ *   Watcher     214 次 / 269 min  异常（hashcat 换规则）
+ *
+ * 关键：**DutyBound 的 85 分钟和 Atlas 的 56 分钟在"时长/调用数"上分不开**，
+ * 所以调阈值一定会误报正常攻坚。因此这条提示刻意设计成**建议而非闸**：
+ * 误报的代价是"多一条提示 + 可能多派一个 12 分钟的子 agent"，
+ * 而漏报的代价是 Atlas 那 44 分钟 / Watcher 那 4.5 小时。
+ *
+ * 为什么建议"换视角"而不是"停止"：Watcher 实测 stop 触发后，agent 在推理里
+ * **复述了规则**（"don't keep burning this session"）然后继续跑 2 小时 ——
+ * 通知可以被一句话覆盖。而 Atlas 那场 subagent 用 12 分钟解决了主 agent
+ * 44 分钟没解决的问题，因为它没有"我已经试过很多次"的包袱。
+ */
+export const DEFAULT_STALE_CALLS_FOR_REVIEW = 60
+
+/**
+ * 长空档的**时长**下限（分钟）。与调用数**同时**满足才建议。
+ *
+ * 为什么要两个条件：只用调用数时，早期密集侦察（一分钟几十次 curl）会瞬间攒够 60 次，
+ * 而那时会话才跑了几分钟、完全正常。实测三场回放：
+ *
+ *   Atlas 26 分钟（空档 17 分钟）→ 误报（正在打 RCE）
+ *   Atlas 49 分钟（空档 17 分钟）→ 误报
+ *   Atlas 73 分钟（空档 23 分钟）→ **真报**（正在换字典）
+ *
+ * 加上 20 分钟下限后，前两次被过滤，只留真报那次。
+ */
+export const DEFAULT_STALE_MINUTES_FOR_REVIEW = 20
+
+/**
+ * 构造"换视角"建议。
+ *
+ * 措辞要点：不是"你卡住了"（那会被当成噪音），而是给一个**具体的、低成本的**动作，
+ * 并明确子 agent 的职责边界 —— 否则它会去重跑主 agent 的步骤（Atlas 那场
+ * subagent 前 8 分钟就在重新枚举，直到读了 crack.c 才转向）。
+ * @param calls - 已经连续多少次调用没有新事实/证据。
+ * @returns 提示文本。
+ */
+export function buildReviewNotice(calls) {
+  return [
+    `🧭 已连续 ${calls} 次调用没有新的 fact / evidence。`,
+    '   如果这条路是"每次都有一点输出、但没有结论"，考虑派一个**审查者**子 agent（subagent）：',
+    '   · 职责是**审查你的工具与假设**，不是重跑你的步骤',
+    '   · 让它优先读你写的脚本 / 配置 / 爆破器，而不是继续用它们',
+    '   · 回报"哪里错了 / 哪条路还没试过"，不要求它拿到 flag',
+    '   依据：自写的校验器 / 解码器 / 爆破器出错时，输出会**全是否定**——',
+    '   这时换输入（字典、参数、工具）永远不中，只有换视角才会去看代码本身。',
+  ].join('\n')
+}
+
 /** 账本路径解析的缓存周期（按调用次数），避免每次 readdir。 */
 const LEDGER_RESOLVE_EVERY = 40
 
@@ -211,6 +268,11 @@ function resolveLedger(stateRoot, machine, cache) {
  *   - `minCallsForSummary`（默认 8）：上一战线至少这么多次调用才给切换摘要。
  *   - `switchAfterCalls`（默认 3）：连续多少次调用指向新战线才真正切换（滞后）。
  *   - `frontBudgetCalls`（默认 40）：一条战线累计多少次调用仍零事实时当场提醒（每条战线最多 2 次）。
+ *   - `staleCallsForReview`（默认 60）：连续多少次执行调用没有新 fact/evidence 时，
+ *     建议派一个"审查者"子 agent（每段空档只提一次，有新进展后重置）。
+ *   - `staleMinutesForReview`（默认 20）：同时要求空档持续这么久 —— 只用调用数时，
+ *     早期密集侦察会瞬间攒够次数，全是误报。
+ *     两条依据见 {@link DEFAULT_STALE_CALLS_FOR_REVIEW} / {@link DEFAULT_STALE_MINUTES_FOR_REVIEW}。
  *   - `logPath`：观测日志（默认 `~/.dsh/htb-auto-state.jsonl`）。
  *   - `tools`：覆盖观测的工具名列表。
  * @param ctx - host 插件上下文。
@@ -234,6 +296,12 @@ export function apply(ctx, config) {
   const frontBudget = Number.isFinite(Number(cfg.frontBudgetCalls)) && Number(cfg.frontBudgetCalls) > 0
     ? Number(cfg.frontBudgetCalls)
     : DEFAULT_FRONT_BUDGET_CALLS
+  const staleCalls = Number.isFinite(Number(cfg.staleCallsForReview)) && Number(cfg.staleCallsForReview) > 0
+    ? Number(cfg.staleCallsForReview)
+    : DEFAULT_STALE_CALLS_FOR_REVIEW
+  const staleMinutes = Number.isFinite(Number(cfg.staleMinutesForReview)) && Number(cfg.staleMinutesForReview) > 0
+    ? Number(cfg.staleMinutesForReview)
+    : DEFAULT_STALE_MINUTES_FOR_REVIEW
   const logPath = typeof cfg.logPath === 'string' && cfg.logPath.trim() !== ''
     ? (isAbsolute(cfg.logPath) ? cfg.logPath : resolve(process.cwd(), cfg.logPath))
     : DEFAULT_LOG_PATH
@@ -244,7 +312,17 @@ export function apply(ctx, config) {
   const trackerOf = (agentId) => {
     let t = trackers.get(agentId)
     if (t === undefined) {
-      t = { front: null, stats: new Map(), pendingFront: null, pendingCount: 0, ledger: { path: undefined, misses: 0 } }
+      t = {
+        front: null,
+        stats: new Map(),
+        pendingFront: null,
+        pendingCount: 0,
+        ledger: { path: undefined, misses: 0 },
+        // 长空档：距上次 fact/evidence 的执行调用数与时间（跨战线累计，换战线不清零）。
+        callsSinceProgress: 0,
+        progressAt: Date.now(),
+        reviewSuggested: false,
+      }
       trackers.set(agentId, t)
     }
     return t
@@ -272,27 +350,60 @@ export function apply(ctx, config) {
       const agentId = typeof exec?.agent?.id === 'string' ? exec.agent.id : 'unknown'
       const t = trackerOf(agentId)
 
-      // ① 事实计数：htb_fact op=add 记到"当前战线"名下。
-      //    这是"这条战线有没有产出"的唯一客观依据。
-      if (exec?.name === 'htb_fact') {
+      // ① 进展信号：fact / evidence 都算"学到了新东西"。
+      //    2026-10-26：`evidence_add` 也归零 —— 它和 fact 一样是"外部可验证的产出"，
+      //    只看 fact 会把"登记了证据但没写 fact"的推进误判成空档。
+      if (exec?.name === 'htb_fact' || exec?.name === 'evidence_add') {
         const args = exec.arguments ?? {}
         const op = typeof args === 'object' && args !== null ? args.op : undefined
-        if (op === 'add' && t.front !== null) {
-          const st = t.stats.get(t.front)
-          if (st !== undefined) st.facts += 1
+        // htb_fact 只有 op=add 算进展（list/query/run-start 不算）。
+        // evidence_add 没有 op 参数，调用即登记。
+        const isProgress = exec.name === 'evidence_add' || op === 'add'
+        if (isProgress) {
+          t.callsSinceProgress = 0
+          t.progressAt = Date.now()
+          t.reviewSuggested = false
+          if (exec.name === 'htb_fact' && op === 'add' && t.front !== null) {
+            const st = t.stats.get(t.front)
+            if (st !== undefined) st.facts += 1
+          }
         }
         return decision
       }
 
       if (typeof exec?.name !== 'string' || !tools.has(exec.name)) return decision
 
-      // ② 战线推断：推断不出就保持当前战线（不猜）。
+      // ② 长空档计数：**在战线推断之前**加 —— 推断不出战线的命令（python3 之类）
+      //    同样是"在干活"，漏计会让空档永远到不了阈值。
+      t.callsSinceProgress = (t.callsSinceProgress ?? 0) + 1
+
+      // ③ 长空档 → 建议换视角（每段空档只提一次；有新 fact 后重置）。
+      let reviewNotice = null
+      const staleMs = Date.now() - (t.progressAt ?? Date.now())
+      if (t.callsSinceProgress >= staleCalls && staleMs >= staleMinutes * 60000 && t.reviewSuggested !== true) {
+        t.reviewSuggested = true
+        reviewNotice = { type: 'text', text: buildReviewNotice(t.callsSinceProgress) }
+        appendLog({
+          ts: new Date().toISOString(),
+          agent: agentId,
+          event: 'review-suggest',
+          callsSinceProgress: t.callsSinceProgress,
+          minutesSinceProgress: Math.round(staleMs / 60000),
+          front: t.front,
+        })
+      }
+
+      // ④ 战线推断：推断不出就保持当前战线（不猜）。
       const args = exec.arguments ?? {}
       const command = typeof args === 'object' && args !== null && typeof args.command === 'string'
         ? args.command
         : ''
       const nextFront = inferFront(command)
-      if (nextFront === null) return decision
+      if (nextFront === null) {
+        if (reviewNotice === null) return decision
+        const baseNull = Array.isArray(decision?.content) ? decision.content : (result.content ?? [])
+        return { kind: 'accept', content: [...baseNull, reviewNotice] }
+      }
 
       const now = Date.now()
       let notice = null
@@ -373,11 +484,13 @@ export function apply(ctx, config) {
         }
       }
 
-      if (notice === null) return decision
+      // 两条提示可能同时命中（长空档 + 战线切换/预算），都保留 —— 它们说的是不同的事。
+      const notices = [reviewNotice, notice].filter((n) => n !== null)
+      if (notices.length === 0) return decision
 
       // base 取上一条 hook 的产出，避免覆盖别的模块刚追加的内容。
       const base = Array.isArray(decision?.content) ? decision.content : (result.content ?? [])
-      return { kind: 'accept', content: [...base, notice] }
+      return { kind: 'accept', content: [...base, ...notices] }
     } catch (error) {
       // 采集器坏掉绝不能影响工具结果 —— 但也不能静默：
       // 2026-10-25 实测，一个变量名写错（switchAfterCalls vs switchAfter）被

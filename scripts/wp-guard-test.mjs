@@ -195,8 +195,8 @@ console.log('接线（经 apply()）')
     skills: { registerProvider: () => {} },
   }
   await apply(ctx, { skillsEnabled: false })
-  // 2026-10-25：+1 = struggle-watch 的停止协议闸。
-  check('apply 注册了四个守卫（红线 + 提问 + WP + 停止协议）', guards.length === 4)
+  // 2026-10-25：+1 = struggle-watch 的停止协议闸；2026-10-26：+1 = machine-own 的交付检查。
+  check('apply 注册了五个守卫（红线 + 提问 + WP + 停止协议 + 交付检查）', guards.length === 5)
   const denied = guards.map(g => g(INCIDENT)).filter(Boolean)
   check('真实事故被拦', denied.length === 1 && denied[0].includes('[wp-read]'))
   check('合法读文件不被拦', guards.map(g => g(read('loot/x.md'))).every(r => r === undefined))
@@ -216,7 +216,7 @@ console.log('接线：unlocked 强制放行 / wpGuard:false 不注册')
     skills: { registerProvider: () => {} },
   }
   await apply(ctx, { skillsEnabled: false, wpGuard: false })
-  check('wpGuard:false 只注册三个守卫', guards.length === 3)
+  check('wpGuard:false 只注册四个守卫', guards.length === 4)
   check('wpGuard:false 后不再拦 WP', guards.map(g => g(INCIDENT)).every(r => r === undefined))
 
   const guards2 = []

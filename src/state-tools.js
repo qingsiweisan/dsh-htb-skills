@@ -14,11 +14,13 @@
  *   - 证据：fact 的 `evidenceId` 直接指向 dsh-htb-evidence 的账本 id（ev-<12hex>）。
  *     于是这张 DAG 是**可验证的**：每个事实都能回到已存证据字节。
  *
- * 工具层强制的一条硬规则（与 htb_coverage 的 baseline 闸同源）：
- *   `htb_frontier op=dead` 必须带 `baselineEvidenceId` ——
- *   "没有对照的全否不是结论"。判死是永久排除一条路，代价最高，所以最需要对照。
- *   第二条硬规则：`htb_fact` 写 cred/vuln/flag 且 confidence=verified 时必须带 evidenceId，
- *   否则必须显式写 confidence:"inferred"（推测不许伪装成事实 —— 见 engagement-inventory-and-triage）。
+ * 工具层的两条硬规则：
+ *   ① `htb_frontier op=dead`：带 `baselineEvidenceId` 则校验其真实存在；
+ *      **不带也可以**（2026-10-26 解自锁），但必须给 `reasonCode`，记为"未对照·可重试"。
+ *      原规则是"必须带对照证据"，实测三场会话 dead 调用数 0/0/0 —— 严格性换来的是
+ *      机制完全失效，所以改成"对照可选、死因必填"。
+ *   ② `htb_fact` 写 cred/vuln/flag 且 confidence=verified 时必须带 evidenceId，
+ *      否则必须显式写 confidence:"inferred"（推测不许伪装成事实）。
  */
 
 import { appendFileSync, existsSync, readFileSync, readdirSync } from 'node:fs'
@@ -150,7 +152,16 @@ function selectRun(rows, selector) {
   //    dead intent 与旧凭据仍然可见 —— 正好是这个功能要解决的问题（2026-10-21 复审）。
   //    需要历史时用 run:"all"；只想看未归属记录用 run:"legacy"。
   if (want === 'legacy') return rows.filter((r) => r.run === undefined)
-  return rows.filter((r) => r.run === want)
+  // 兼容旧账本（2026-10-26）：`intent-update` 从这一版才开始写 `run`，
+  // 之前的 claim/done/dead 全都没有该字段。若直接按 `r.run === want` 过滤，
+  // **历史会话的死路记录会永久不可见**（状态永远停在 todo）。
+  // 这里让"没有 run 的 intent-update"继承其所属 intent 的 run。
+  const intentRun = new Map()
+  for (const r of rows) {
+    if (r.type === 'intent' && r.run !== undefined && typeof r.id === 'string') intentRun.set(r.id, r.run)
+  }
+  return rows.filter((r) => r.run === want
+    || (r.run === undefined && r.type === 'intent-update' && intentRun.get(r.id) === want))
 }
 
 
@@ -211,7 +222,8 @@ function foldIntents(rows) {
     } else if (r.type === 'intent-update' && map.has(r.id)) {
       const cur = map.get(r.id)
       const next = { ...cur, status: r.status ?? cur.status }
-      for (const k of ['baseline', 'reason', 'owner', 'result', 'claimedAt', 'reasonCode']) {
+      // deadVerified 是布尔，用 !== undefined 判（false 也要传下去）。
+      for (const k of ['baseline', 'reason', 'owner', 'result', 'claimedAt', 'reasonCode', 'deadVerified']) {
         if (r[k] !== undefined) next[k] = r[k]
       }
       map.set(r.id, next)
@@ -373,9 +385,17 @@ function runFact(config, args) {
       ...(args.source !== undefined ? { source: String(args.source) } : {}),
       ...(run !== undefined ? { run } : {}),
     })
+    // flag 一落账就提示"还没提交"（2026-10-26）。
+    // Atlas 实测：user flag 在 50.4 分钟写进账本，直到 270.2 分钟用户追问才提交 ——
+    // 中间 220 分钟里，账本里"有 flag"这件事被当成了"任务完成"。
+    // 提示放在**写入的那一刻**，因为那是唯一还看得见"下一步"的时机。
+    const flagHint = kind === 'flag'
+      ? '\n   🔴 还没提交到平台 —— 平台的"完成"是 flag 入账，不是文件里读到。'
+        + '\n      提交: htb_machine_own { machine_id: <id>, flag: "<flag>" }'
+      : ''
     return `✅ ${id} [${kind}/${confidence}] ${args.key}`
       + `${args.value !== undefined ? ` = ${args.value}` : ''}\n   → ${found.path}`
-      + `${run !== undefined ? `\n   run=${run}` : ''}${evidenceWarning}`
+      + `${run !== undefined ? `\n   run=${run}` : ''}${evidenceWarning}${flagHint}`
   }
 
   if (op !== 'list' && op !== 'query') return `⚠️ op 只能是 add / run-start / list / query，收到 "${op}"`
@@ -464,24 +484,44 @@ function runFrontier(config, args) {
     if (cur === undefined) return `⚠️ 没有 intent ${args.id}。现有: ${intents.map((r) => r.id).join(', ') || '(空)'}`
 
     if (op === 'dead') {
-      // 🔴 与 htb_coverage 同源的硬规则：判死必须带对照组证据。
-      if (args.baselineEvidenceId === undefined) {
-        return '⚠️ 工具层拒绝：判 dead（"这条路不通"）必须带 baselineEvidenceId。\n'
-          + '   理由与 htb_coverage 同一条硬规则 —— **没有对照的全否不是结论**。\n'
-          + '   判死会永久排除一条路，代价最高，所以最需要对照。先做三步：\n'
-          + '   ① 跑一个"证明工具/通道本身是活的"的对照探测（例如读一个确定存在的文件）；\n'
-          + '   ② evidence_add 把该探测的命令 + 输出登记为证据；\n'
-          + '   ③ 把 ev-… 作为 baselineEvidenceId 传进来，并写 reason 说明"哪一步失败 + 为什么是对照过的失败"。'
-      }
-      if (!EVIDENCE_RE.test(String(args.baselineEvidenceId))) {
-        return `⚠️ baselineEvidenceId 形态不对：期望 ev-<12位hex>，收到 "${args.baselineEvidenceId}"`
-      }
-      // 与 htb_fact 同一条存在性校验：格式对但账本里没有 = 编造的对照。
-      const baseExists = evidenceExists(config, String(args.baselineEvidenceId))
-      if (baseExists === false) {
-        return `⚠️ 工具层拒绝：baselineEvidenceId ${args.baselineEvidenceId} 在证据账本索引里不存在。\n`
-          + `   索引: ${join(ledgerRootOf(config), 'index.jsonl')}\n`
-          + '   判死的对照必须是**真实登记过的探测**，不是填一个格式正确的 id。'
+      // 🔴 2026-10-26 解自锁：`baselineEvidenceId` 从**必填**改成**可选**。
+      //
+      // 原来的规则是"判死必须带对照组证据"，理由本身没错（没有对照的全否不是结论）。
+      // 但实测三场会话（DutyBound / Watcher / Atlas）`dead` 调用数 **0 / 0 / 0** ——
+      // 这条规则把机制本身饿死了，因为：
+      //   · evidence 只在**成功**时写（flag / RCE 验证），死路没有 evidence；
+      //   · 于是"想判死 → 要先有对照证据 → 但没有 → 写不了"形成自锁；
+      //   · 连带 `reasonCode` 死因枚举、连续判死触发换层检查，全部从未触发。
+      //
+      // 现在的取舍：**允许粗糙但存在的死路记录，而不是严谨但零记录**。
+      //   · 不带 baseline → 记 `deadVerified: false`，但**必须写 reasonCode**
+      //     （用枚举换取可聚合性，这是不带对照时的最低成本约束）；
+      //   · 带 baseline   → 照旧校验形态 + 存在性，记 `deadVerified: true`。
+      // `htb_brief` 会把未对照的死路标成"可重试"，避免被当成定论。
+      const hasBaseline = args.baselineEvidenceId !== undefined
+      if (!hasBaseline) {
+        const code = typeof args.reasonCode === 'string' && DEAD_REASONS.includes(args.reasonCode)
+          ? args.reasonCode
+          : undefined
+        if (code === undefined) {
+          return '⚠️ 判 dead 需要 reasonCode（不带 baselineEvidenceId 时必填）。\n'
+            + `   可选: ${DEAD_REASONS.join(' / ')}\n`
+            + '   为什么：不带对照的死路会被标记为"未对照、可重试"，而**死因枚举**是它唯一'
+            + '能贡献的可聚合信息 —— 没有它，这条记录对后续判断零价值。\n'
+            + '   如果你确实做过对照探测，改用 baselineEvidenceId 传 ev-…（会记为已对照）。'
+        }
+      } else {
+        if (!EVIDENCE_RE.test(String(args.baselineEvidenceId))) {
+          return `⚠️ baselineEvidenceId 形态不对：期望 ev-<12位hex>，收到 "${args.baselineEvidenceId}"`
+        }
+        // 与 htb_fact 同一条存在性校验：格式对但账本里没有 = 编造的对照。
+        const baseExists = evidenceExists(config, String(args.baselineEvidenceId))
+        if (baseExists === false) {
+          return `⚠️ 工具层拒绝：baselineEvidenceId ${args.baselineEvidenceId} 在证据账本索引里不存在。\n`
+            + `   索引: ${join(ledgerRootOf(config), 'index.jsonl')}\n`
+            + '   判死的对照必须是**真实登记过的探测**，不是填一个格式正确的 id。\n'
+            + '   （如果确实没做对照，去掉这个参数、改传 reasonCode 即可 —— 会记为"未对照"。）'
+        }
       }
     }
 
@@ -499,9 +539,20 @@ function runFrontier(config, args) {
       type: 'intent-update',
       id: args.id,
       status,
+      // 🔴 2026-10-26 修：intent-update 必须继承所属 intent 的 `run`。
+      //    `selectRun` 在存在 run-start 时**只返回带 run 的记录**，而这里原来不写 run
+      //    ⇒ 启用轮次隔离后，所有 claim/done/dead 更新在 list/brief 里**完全不可见**
+      //    （状态永远停在 todo）。这会让"判死 → 换层"整条链路静默失效。
+      ...(cur.run !== undefined ? { run: cur.run } : {}),
       ...(op === 'claim' ? { claimedAt: nowIso } : {}),
       ...(op === 'claim' && args.owner !== undefined ? { owner: String(args.owner) } : {}),
-      ...(op === 'dead' ? { baseline: String(args.baselineEvidenceId), ...(args.reason !== undefined ? { reason: String(args.reason) } : {}) } : {}),
+      // deadVerified（2026-10-26）：这条死路有没有做过对照探测。
+      // 缺省视为 true —— 旧记录都是"当时强制带 baseline"写下的，不该被降级。
+      ...(op === 'dead' ? {
+        deadVerified: args.baselineEvidenceId !== undefined,
+        ...(args.baselineEvidenceId !== undefined ? { baseline: String(args.baselineEvidenceId) } : {}),
+        ...(args.reason !== undefined ? { reason: String(args.reason) } : {}),
+      } : {}),
       ...(op === 'dead' && reasonCode !== undefined ? { reasonCode } : {}),
       ...(op === 'done' && args.result !== undefined ? { result: String(args.result) } : {}),
     })
@@ -546,7 +597,15 @@ function runFrontier(config, args) {
       const from = Array.isArray(r.from) && r.from.length > 0 ? ` ←${r.from.join(',')}` : ''
       const tgt = r.target !== undefined ? ` @${r.target}` : ''
       const own = r.owner !== undefined ? ` (${r.owner})` : ''
-      const base = r.status === 'dead' && r.baseline !== undefined ? ` [对照 ${r.baseline}]` : ''
+      // 未对照的死路（deadVerified === false）显式标出来：它只是"我觉得不通"，
+      // 不是"我验证过不通"。下游（htb_brief / 下一轮会话）据此决定要不要重试。
+      const base = r.status !== 'dead'
+        ? ''
+        : r.baseline !== undefined
+          ? ` [对照 ${r.baseline}]`
+          : r.deadVerified === false
+            ? ' [未对照·可重试]'
+            : ''
       const rc = r.status === 'dead' && r.reasonCode !== undefined ? ` [${r.reasonCode}]` : ''
       // 预算与已投入：doing 状态才有时效意义。超预算不阻断，但必须让调用方看见 ——
       // 老手的"这个方向不值了"是模糊判断，这里把它变成可核对的事实。
@@ -645,6 +704,22 @@ function composeBrief(config, args) {
     }
     out.push('')
   }
+  // 已知死路（2026-10-26 新增）：子 agent 最大的浪费是**重走主 agent 已排除的路**。
+  // Atlas 那场 subagent 花了前 8 分钟重新枚举服务/计划任务/凭据位置，其中一部分
+  // 主 agent 早已试过。把 dead 意图直接写进任务书，是最省事的一次性修复。
+  // 未对照的死路标"可重试"—— 它们可能只是主 agent 当时判断错了。
+  const deads = intents.filter((r) => r.status === 'dead')
+  if (deads.length > 0) {
+    out.push('## 已知死路（主 agent 已排除，**除非你有具体理由，否则不要重走**）')
+    for (const d of deads) {
+      const tag = d.deadVerified === false ? '（未对照·可重试）' : '（已对照）'
+      out.push(`- ${d.action}${d.target !== undefined ? ` @${d.target}` : ''} ${tag}`
+        + `${d.reasonCode !== undefined ? ` [${d.reasonCode}]` : ''}`
+        + `${d.reason !== undefined ? ` —— ${d.reason}` : ''}`)
+    }
+    out.push('')
+  }
+
   out.push('## 建议加载的技能卡（按任务场景命中规则表，用 skill 工具按名加载）')
   if (capped.length > 0) for (const c of capped) out.push(`- ${c}`)
   else out.push(`（未命中规则表${error !== undefined ? `；规则表读取失败: ${error}` : `；规则表: ${rulesPath}`}）`)
@@ -719,7 +794,11 @@ export function registerStateTools(ctx, config) {
         ifWrong: { type: 'string', description: 'add：如果这个假设错了，应该去看什么（强制预留退路）' },
         budget: { type: 'number', description: 'add：预计投入多少分钟。claim 后超时会在 list 里标 ⚠️超预算' },
         reasonCode: { type: 'string', description: `dead：死因枚举（${DEAD_REASONS.join('/')}）—— 自由文本无法聚合，枚举才能统计"最常死在哪类原因"` },
-        baselineEvidenceId: { type: 'string', description: 'dead 必填：对照组探测的证据 id（会校验是否真实存在）' },
+        baselineEvidenceId: {
+          type: 'string',
+          description: 'dead 可选：对照组探测的证据 id（会校验是否真实存在）。'
+            + '不带时记"未对照·可重试"，但必须给 reasonCode',
+        },
         reason: { type: 'string', description: 'dead：哪一步失败、为什么这是"对照过的失败"' },
         result: { type: 'string', description: 'done：产出了什么（如 fact id）' },
         run: { type: 'string', description: 'list：轮次过滤，传 "all" 看全部（默认当前 run）' },
